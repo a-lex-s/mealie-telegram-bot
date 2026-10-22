@@ -13,6 +13,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from mealie_bot.i18n import SUPPORTED_LANGUAGES
+from mealie_bot.i18n.labels import parse_label_emoji
 
 # Feature modules that exist in this build, with their default state.
 KNOWN_FEATURES: dict[str, bool] = {"shopping": True}
@@ -87,6 +88,8 @@ class Settings:
     features: frozenset[str] = frozenset({"shopping"})
     delete_commands: bool = True
     delete_item_messages: bool = True
+    # Exact label name (case-folded) -> emoji, from LABEL_EMOJI; keywords cover the rest.
+    label_emoji: Mapping[str, str] = field(default_factory=dict)
     log_level: str = "INFO"
     http_timeout: float = 10.0
 
@@ -138,6 +141,7 @@ class Settings:
             features=features,
             delete_commands=_bool(env, "DELETE_COMMANDS", True),
             delete_item_messages=_bool(env, "DELETE_ITEM_MESSAGES", True),
+            label_emoji=parse_label_emoji(_read(env, "LABEL_EMOJI")),
             log_level=log_level,
             http_timeout=timeout,
         )

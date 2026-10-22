@@ -163,7 +163,7 @@ async def test_text_adds_items_and_shows_list_with_undo(harness, mealie_mock):
     reply = session.last(SendMessage)
     assert "Groceries" in reply.text
     assert "➕ <b>Added</b> (1)" in reply.text
-    assert "<b>l milk</b> <i>2</i> <i>· Dairy</i>" in reply.text
+    assert "<b>l milk</b> <i>2</i> <i>· 🥛 Dairy</i>" in reply.text
     assert reply.reply_markup.inline_keyboard[-1][0].text == "↩️ Undo"
     # The user's text is deleted once the items are on the list.
     deleted = session.last(DeleteMessage)
@@ -274,8 +274,8 @@ async def test_list_command_in_german_collapsed_and_tidy(harness, mealie_mock):
     reply = session.last(SendMessage)
     assert "2 offen · 0 erledigt" in reply.text
     assert buttons(reply) == [
-        "▸ Backwaren · 1",
-        "▸ Milchprodukte · 1",
+        "🍞 Backwaren · 1 ▸",
+        "🥛 Milchprodukte · 1 ▸",
         "🔄 Aktualisieren",
         "✅ Erledigt (0)",
     ]
@@ -302,10 +302,10 @@ async def test_toggle_expands_category(harness, mealie_mock):
     mock_list(mealie_mock, make_item("i-1", "Milch", label="Dairy"), make_item("i-2", "Soap"))
     await feed(callback(ListAction(action="toggle", arg=NO_LABEL).pack()))
     texts = buttons(session.last(EditMessageText))
-    assert texts[:3] == ["▸ Dairy · 1", "▾ Sonstiges · 1", "Soap"]
+    assert texts[:3] == ["🥛 Dairy · 1 ▸", "📦 Sonstiges · 1 ▾", "Soap"]
     await feed(callback(ListAction(action="toggle", arg=NO_LABEL).pack()))
     texts = buttons(session.last(EditMessageText))
-    assert texts[:2] == ["▸ Dairy · 1", "▸ Sonstiges · 1"]
+    assert texts[:2] == ["🥛 Dairy · 1 ▸", "📦 Sonstiges · 1 ▸"]
 
 
 async def test_second_list_command_replaces_the_old_message(harness, mealie_mock):

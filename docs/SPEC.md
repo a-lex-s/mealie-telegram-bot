@@ -24,7 +24,7 @@ mealie_bot/
   __main__.py          entry point (python -m mealie_bot)
   config.py            settings from environment variables / *_FILE secrets
   logging_setup.py     logging with secret redaction
-  i18n/                string catalogs (en = reference, de = complete)
+  i18n/                string catalogs (en = reference, de = complete), label emoji table
   mealie/client.py     shared async Mealie API client (httpx)
   telegram/            dispatcher wiring, access control, language middleware
   features/
@@ -55,6 +55,7 @@ bot at start-up with exit code 2 and a message that never contains secret values
 | `FEATURE_SHOPPING` | no | `true` | Enable the shopping list feature |
 | `DELETE_COMMANDS` | no | `true` | Delete the user's `/list`, `/lists` and `/clear` messages once handled, so only the list stays in the chat |
 | `DELETE_ITEM_MESSAGES` | no | `true` | Delete the user's item messages once the items were added; the history entry records them |
+| `LABEL_EMOJI` | no | keyword table | Emoji per Mealie label name, `Name=🌶️;Other=🐾`; overrides the built-in keyword table (6.4) |
 | `MEALIE_TIMEOUT` | no | `10` | HTTP timeout for Mealie requests in seconds |
 | `TZ` | no | UTC | Time zone of the container; used for the "as of" time in list messages and history entries |
 | `LOG_LEVEL` | no | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR` |
@@ -178,10 +179,21 @@ is shown; the bot edits it in place instead of posting new messages.
   **Done (m)** with the ticked-off items struck through, and `<i>As of HH:MM</i>`
   (container local time). Empty list: "Nothing to buy. 🎉"; everything ticked
   off: "Everything bought. 🎉".
-* Keyboard: one header button per label (`▸ Label · n` collapsed, `▾ Label · n`
-  expanded), labels alphabetical with unlabelled items last as "Other". All
-  categories start collapsed; tapping a header toggles it for that message. A
-  list with a single category shows its items directly without a header.
+* Keyboard: one header button per label (`🧂 Label · n ▸` collapsed,
+  `🧂 Label · n ▾` expanded), labels alphabetical with unlabelled items last as
+  "Other". All categories start collapsed; tapping a header toggles it for that
+  message. A list with a single category shows its items directly without a
+  header.
+* Header buttons are coloured blue (Bot API button `style` `primary`), item
+  buttons keep the default colour, **Done** is green (`success`), **Undo**,
+  **Remove** and **Yes, remove** are red (`danger`). Clients that predate
+  button styles show plain buttons.
+* Each category gets an emoji from a keyword table in `mealie_bot/i18n/labels.py`
+  (German and English keywords, case-insensitive substring match on the label
+  name, first match wins; e.g. "Obst & Gemüse" and "Fruit" → 🍎, "Würzmittel"
+  and "Spices" → 🧂, "Drogerie" → 🧴). Labels without a match and items
+  without a label get 📦. `LABEL_EMOJI` maps exact label names to an emoji and
+  wins over the table. The same emoji appears in the "Added" quote.
 * Items of an expanded category are buttons labelled `name · quantity`
   (`Mehl · 500 g`; quantity 1 without unit is omitted). Short names share a
   row (up to three of at most 10 characters, two of at most 18 characters),

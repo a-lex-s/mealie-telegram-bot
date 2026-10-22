@@ -7,7 +7,7 @@ name from `docs/images/`.
 | File | What it shows | How to get there |
 |---|---|---|
 | `list-collapsed.png` | The live list: progress bar, collapsed categories, the *Done* quote and the *Refresh* / *Done* / *Remove* buttons | send `/list` |
-| `list-expanded.png` | One category opened, items as buttons, short names sharing a row | tap `▸ Dairy` |
+| `list-expanded.png` | One category opened, items as buttons, short names sharing a row | tap `🥛 Dairy` |
 | `add-items.png` | Your message `500 g flour, baking powder, 3 lemons` with the list right below it: the *Added* quote, the added categories opened and the *Undo* button | send that message |
 
 Optional dark variants are named `<name>-dark.png`.

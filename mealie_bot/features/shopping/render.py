@@ -8,15 +8,18 @@ decide when to send, edit or delete messages.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from html import escape
 
+from aiogram.enums import ButtonStyle
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from mealie_bot.features.shopping.parser import ParsedEntry
 from mealie_bot.i18n import Translator
+from mealie_bot.i18n.labels import label_emoji
 from mealie_bot.mealie.client import JSON
 
 # Telegram allows 100 buttons per keyboard; keep room for headers and controls.
@@ -32,6 +35,12 @@ VIEW_CLEAR = "clear"  # confirmation before deleting ticked-off items
 
 # Key used for items without a label, both in ``ListState.expanded`` and callback data.
 NO_LABEL = "-"
+
+# Button colours (Bot API ``style``): category headers stand out from plain item buttons,
+# the safe control is green and the destructive ones are red. Older clients ignore them.
+STYLE_CATEGORY = ButtonStyle.PRIMARY
+STYLE_DONE = ButtonStyle.SUCCESS
+STYLE_DESTRUCTIVE = ButtonStyle.DANGER
 
 
 class ItemAction(CallbackData, prefix="it"):
@@ -176,13 +185,21 @@ def _group(items: list[JSON], tr: Translator) -> list[tuple[str, str, list[JSON]
     ]
 
 
+def category_title(name: str, count: int, expanded: bool, emoji: Mapping[str, str] | None) -> str:
+    """Text of a category header button: ``🧂 Würzmittel · 2 ▾``."""
+    arrow = "▾" if expanded else "▸"
+    return f"{label_emoji(name, emoji)} {name} · {count} {arrow}"
+
+
 def render_list(
     list_name: str,
     items: list[JSON],
     state: ListState,
     tr: Translator,
     now: datetime | None = None,
+    emoji: Mapping[str, str] | None = None,
 ) -> tuple[str, InlineKeyboardMarkup]:
+    """Render the list message; ``emoji`` holds ``LABEL_EMOJI`` overrides for categories."""
     language = tr.language
     checked = [i for i in items if i.get("checked")]
     unchecked = [i for i in items if not i.get("checked")]
@@ -203,7 +220,8 @@ def render_list(
         lines.append(tr("shopping.list_all_done" if checked else "shopping.list_empty"))
     if state.added:
         added_lines = [
-            f"{item_html(item, language)} <i>· {escape(label_name(item, tr))}</i>"
+            f"{item_html(item, language)} <i>· {label_emoji(label_name(item, tr), emoji)} "
+            f"{escape(label_name(item, tr))}</i>"
             for item in state.added
         ]
         lines.append(
@@ -230,12 +248,12 @@ def render_list(
     for key, group_name, group in groups:
         expanded = len(groups) == 1 or key in state.expanded
         if len(groups) > 1:
-            arrow = "▾" if expanded else "▸"
             rows.append(
                 [
                     InlineKeyboardButton(
-                        text=_truncate(f"{arrow} {group_name} · {len(group)}"),
+                        text=_truncate(category_title(group_name, len(group), expanded, emoji)),
                         callback_data=ListAction(action="toggle", view=VIEW_OPEN, arg=key).pack(),
+                        style=STYLE_CATEGORY,
                     )
                 ]
             )
@@ -254,7 +272,9 @@ def render_list(
 
     controls = [
         InlineKeyboardButton(
-            text=tr("shopping.btn_undo"), callback_data=ListAction(action="undo").pack()
+            text=tr("shopping.btn_undo"),
+            callback_data=ListAction(action="undo").pack(),
+            style=STYLE_DESTRUCTIVE,
         )
         if state.undo
         else InlineKeyboardButton(
@@ -264,6 +284,7 @@ def render_list(
         InlineKeyboardButton(
             text=tr("shopping.btn_done", count=len(checked)),
             callback_data=ListAction(action="show", view=VIEW_DONE).pack(),
+            style=STYLE_DONE,
         ),
     ]
     rows.append(controls)
@@ -293,6 +314,7 @@ def _render_done(
             InlineKeyboardButton(
                 text=tr("shopping.btn_clear", count=len(checked)),
                 callback_data=ListAction(action="clear_ask", view=VIEW_DONE).pack(),
+                style=STYLE_DESTRUCTIVE,
             )
         )
     rows.append(controls)
@@ -315,6 +337,7 @@ def _render_clear_question(
             InlineKeyboardButton(
                 text=tr("shopping.btn_clear_yes"),
                 callback_data=ListAction(action="clear", view=VIEW_OPEN).pack(),
+                style=STYLE_DESTRUCTIVE,
             ),
             InlineKeyboardButton(
                 text=tr("shopping.btn_cancel"),

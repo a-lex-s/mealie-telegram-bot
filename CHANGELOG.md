@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - List message with progress bar, collapsible categories, short names packed
   into shared button rows, `name · quantity` labels, ticked-off items in an
   expandable quote and an "as of" time (`TZ`).
+- Category buttons stand out: blue header buttons with an emoji per label
+  (keyword table in German and English, overridable with `LABEL_EMOJI`),
+  green *Done* and red *Undo* / *Remove* buttons.
 - Adding items shows the updated list with an "Added" quote and an Undo button
   that deletes the created items and restores merged quantities; toasts for
   button taps and "typing…" while Mealie is asked.

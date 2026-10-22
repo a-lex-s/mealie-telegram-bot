@@ -14,6 +14,7 @@ def test_defaults():
     assert settings.mealie_url == "http://mealie:9000"
     assert settings.allowed_user_ids == {1001, 1002}
     assert settings.delete_commands is True
+    assert settings.label_emoji == {}
     assert settings.delete_item_messages is True
     assert settings.features == {"shopping"}
     assert settings.bot_language is None
@@ -79,8 +80,10 @@ def test_options():
             "LOG_LEVEL": "debug",
             "DELETE_COMMANDS": "no",
             "DELETE_ITEM_MESSAGES": "0",
+            "LABEL_EMOJI": "Würzmittel=🌶️; Tiere = 🐾 ;broken;=🙂",
         }
     )
+    assert settings.label_emoji == {"würzmittel": "🌶️", "tiere": "🐾"}
     assert settings.delete_commands is False
     assert settings.delete_item_messages is False
     assert settings.mealie_url == "https://mealie.example.com"

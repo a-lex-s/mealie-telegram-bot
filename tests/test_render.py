@@ -46,7 +46,7 @@ def test_collapsed_by_default_with_category_headers():
     assert "<code>▰▰▱▱▱▱▱▱▱▱</code>" in text  # 1 of 4 done
     assert "<blockquote expandable>✅ <b>Done</b> (1)\n<s>Milk</s></blockquote>" in text
     assert "<i>As of 21:04</i>" in text
-    assert button_texts(markup) == ["▸ Fruit · 2", "▸ Other · 1", "🔄 Refresh", "✅ Done (1)"]
+    assert button_texts(markup) == ["🍎 Fruit · 2 ▸", "📦 Other · 1 ▸", "🔄 Refresh", "✅ Done (1)"]
     toggle = ListAction.unpack(markup.inline_keyboard[0][0].callback_data)
     assert (toggle.action, toggle.arg) == ("toggle", "l-Fruit")
     assert ListAction.unpack(markup.inline_keyboard[1][0].callback_data).arg == NO_LABEL
@@ -59,7 +59,7 @@ def test_expanded_category_lists_items_in_position_order():
         make_item("3", "Bananas", label="Fruit", position=1),
     ]
     _, markup = render_list("G", items, ListState(expanded={"l-Fruit"}), EN)
-    assert rows(markup)[:3] == [["▾ Fruit · 2"], ["Bananas", "Apples"], ["▸ Other · 1"]]
+    assert rows(markup)[:3] == [["🍎 Fruit · 2 ▾"], ["Bananas", "Apples"], ["📦 Other · 1 ▸"]]
     data = ItemAction.unpack(markup.inline_keyboard[1][0].callback_data)
     assert (data.action, data.item_id) == ("check", "3")
 
@@ -85,7 +85,7 @@ def test_added_quote_and_undo_button():
     added = [make_item("9", "", note="Flour", quantity=500, unit={"name": "g"}, label="Baking")]
     state = ListState(expanded={"l-Baking"}, added=added, undo=UndoInfo(created_ids=["9"]))
     text, markup = render_list("G", [*added, make_item("1", "Soap")], state, EN)
-    assert "➕ <b>Added</b> (1)\n<b>Flour</b> <i>500 g</i> <i>· Baking</i>" in text
+    assert "➕ <b>Added</b> (1)\n<b>Flour</b> <i>500 g</i> <i>· 🧁 Baking</i>" in text
     assert button_texts(markup)[-2:] == ["↩️ Undo", "✅ Done (0)"]
     assert ListAction.unpack(markup.inline_keyboard[-1][0].callback_data).action == "undo"
 
@@ -147,6 +147,32 @@ def test_item_display_puts_name_first():
         "6", "", quantity=500, unit={"name": "Gramm", "abbreviation": "g", "useAbbreviation": True}
     )
     assert item_display(abbreviated, "de") == "? · 500 g"
+
+
+def test_category_buttons_are_coloured_and_items_are_not():
+    items = [
+        make_item("1", "Apples", label="Fruit"),
+        make_item("2", "Soap"),
+        make_item("3", "Milk", checked=True),
+    ]
+    _, markup = render_list("G", items, ListState(expanded={"l-Fruit"}), EN)
+    header, apple, other, controls = markup.inline_keyboard
+    assert header[0].style == other[0].style == "primary" and apple[0].style is None
+    assert [b.style for b in controls] == [None, "success"]
+    _, markup = render_list("G", items, ListState(undo=UndoInfo(created_ids=["1"])), EN)
+    assert markup.inline_keyboard[-1][0].style == "danger"
+    _, markup = render_list("G", items, ListState(view=VIEW_DONE), EN)
+    assert [b.style for b in markup.inline_keyboard[-1]] == [None, "danger"]
+    _, markup = render_list("G", items, ListState(view=VIEW_CLEAR), EN)
+    assert [b.style for b in markup.inline_keyboard[0]] == ["danger", None]
+
+
+def test_label_emoji_overrides_reach_headers_and_added_quote():
+    items = [make_item("1", "Pepper", label="Würzmittel"), make_item("2", "Soap")]
+    state = ListState(added=[items[0]])
+    text, markup = render_list("G", items, state, DE, emoji={"würzmittel": "🌶️"})
+    assert button_texts(markup)[0] == "🌶️ Würzmittel · 1 ▸"
+    assert "<i>· 🌶️ Würzmittel</i>" in text
 
 
 def test_quantities_and_entries():

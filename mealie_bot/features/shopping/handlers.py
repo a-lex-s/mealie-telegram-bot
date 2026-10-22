@@ -16,7 +16,7 @@ The chat is kept tidy around one *live* list message per chat:
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import suppress
 from datetime import datetime
 
@@ -70,10 +70,12 @@ class ShoppingUI:
         delete_commands: bool,
         delete_item_messages: bool,
         clock: Clock = _local_now,
+        label_emoji: Mapping[str, str] | None = None,
     ) -> None:
         self.service = service
         self.delete_commands = delete_commands
         self.delete_item_messages = delete_item_messages
+        self.label_emoji = label_emoji
         self.clock = clock
         self.chats: dict[int, ChatState] = {}
         # Undo data by (chat id, message id); removed once used or superseded.
@@ -89,7 +91,9 @@ class ShoppingUI:
     ) -> tuple[str, InlineKeyboardMarkup, str]:
         shopping_list = await self.service.active_list(user_id)
         data = await self.service.view(shopping_list["id"])
-        text, markup = render_list(data.name, data.items, state, tr, now=self.clock())
+        text, markup = render_list(
+            data.name, data.items, state, tr, now=self.clock(), emoji=self.label_emoji
+        )
         return text, markup, data.name
 
     async def show(self, message: Message, user_id: int, tr: Translator, state: ListState) -> None:
@@ -202,6 +206,7 @@ def build_router(context: FeatureContext) -> Router:
         service,
         delete_commands=context.settings.delete_commands,
         delete_item_messages=context.settings.delete_item_messages,
+        label_emoji=context.settings.label_emoji,
     )
     router = Router(name="shopping")
 

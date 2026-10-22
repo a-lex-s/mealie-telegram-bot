@@ -65,6 +65,7 @@ def test_configuration_page_documents_every_setting() -> None:
         "SHOPPING_LIST",
         "DELETE_COMMANDS",
         "DELETE_ITEM_MESSAGES",
+        "LABEL_EMOJI",
         "MEALIE_TIMEOUT",
         "TZ",
         "LOG_LEVEL",

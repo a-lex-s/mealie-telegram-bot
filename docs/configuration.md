@@ -14,9 +14,24 @@ be read from a file by setting `<NAME>_FILE` (Docker or Compose secrets).
 | `FEATURE_SHOPPING` | no | `true` | Enable the shopping list feature |
 | `DELETE_COMMANDS` | no | `true` | Delete your `/list`, `/lists`, `/clear` messages once handled; set `false` to keep them |
 | `DELETE_ITEM_MESSAGES` | no | `true` | Delete your item messages (`2 l milk, eggs`) once the items are on the list; set `false` to keep them |
+| `LABEL_EMOJI` | no | built-in table | Emoji per Mealie label, e.g. `Würzmittel=🌶️;Tiere=🐾`; names must match exactly (case does not matter) and win over the built-in keyword table |
 | `MEALIE_TIMEOUT` | no | `10` | Mealie request timeout in seconds |
 | `TZ` | no | UTC | Container time zone, e.g. `Europe/Berlin`; used for the "as of" time and history times |
 | `LOG_LEVEL` | no | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR` |
 
 Invalid configuration stops the bot at start-up with exit code 2 and a message
 that never contains secret values.
+
+## Category emoji
+
+Category buttons show an emoji picked from the label name: the first keyword
+that occurs in the name wins, in German or English (`Obst`, `Fruit` → 🍎;
+`Milch`, `Dairy` → 🥛; `Würz`, `Spice`, `Sauce` → 🧂; `Drogerie`,
+`Personal Care` → 🧴; `Haushalt`, `Household` → 🧻; `Getränk`, `Drink` → 🥤 and
+so on; the full table is in `mealie_bot/i18n/labels.py`). Labels without a
+match and items without a label get 📦. To change or add one, set
+`LABEL_EMOJI` with exact label names separated by `;`:
+
+```
+LABEL_EMOJI=Würzmittel=🌶️;Tiere=🐾;Sonstiges=🛍️
+```
