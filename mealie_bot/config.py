@@ -86,6 +86,7 @@ class Settings:
     shopping_list: str | None = None
     features: frozenset[str] = frozenset({"shopping"})
     delete_commands: bool = True
+    delete_item_messages: bool = True
     log_level: str = "INFO"
     http_timeout: float = 10.0
 
@@ -136,6 +137,7 @@ class Settings:
             shopping_list=_read(env, "SHOPPING_LIST"),
             features=features,
             delete_commands=_bool(env, "DELETE_COMMANDS", True),
+            delete_item_messages=_bool(env, "DELETE_ITEM_MESSAGES", True),
             log_level=log_level,
             http_timeout=timeout,
         )

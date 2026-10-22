@@ -54,6 +54,7 @@ bot at start-up with exit code 2 and a message that never contains secret values
 | `SHOPPING_LIST` | no | first list | Default shopping list, by name (case-insensitive) or ID |
 | `FEATURE_SHOPPING` | no | `true` | Enable the shopping list feature |
 | `DELETE_COMMANDS` | no | `true` | Delete the user's `/list`, `/lists` and `/clear` messages once handled, so only the list stays in the chat |
+| `DELETE_ITEM_MESSAGES` | no | `true` | Delete the user's item messages once the items were added; the history entry records them |
 | `MEALIE_TIMEOUT` | no | `10` | HTTP timeout for Mealie requests in seconds |
 | `TZ` | no | UTC | Time zone of the container; used for the "as of" time in list messages and history entries |
 | `LOG_LEVEL` | no | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR` |
@@ -98,8 +99,14 @@ bot do?") are published per language at start-up (`setMyCommands`,
 
 With `DELETE_COMMANDS=true` (default) the bot deletes the user's `/list`,
 `/lists` and `/clear` messages after they have been handled, so the chat holds
-the list and the history instead of a trail of commands. `/start`, `/help` and
-plain text messages that add items are never deleted.
+the list and the history instead of a trail of commands. `/start` and `/help`
+are never deleted.
+
+With `DELETE_ITEM_MESSAGES=true` (default) a plain text message is deleted once
+its items are on the list (see 6.3); the history entry records what was added.
+A message the bot could not parse or add stays in the chat so the user can fix
+and resend it. If Telegram refuses the deletion (e.g. in a group where the bot
+may not delete others' messages), the message simply stays.
 
 ### 6.2 Active list
 

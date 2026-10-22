@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 import pytest
 from aiogram import Bot
 from aiogram.client.session.base import BaseSession
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.methods import (
     AnswerCallbackQuery,
     DeleteMessage,
@@ -164,7 +165,57 @@ async def test_text_adds_items_and_shows_list_with_undo(harness, mealie_mock):
     assert "➕ <b>Added</b> (1)" in reply.text
     assert "<b>l milk</b> <i>2</i> <i>· Dairy</i>" in reply.text
     assert reply.reply_markup.inline_keyboard[-1][0].text == "↩️ Undo"
-    assert not session.sent(DeleteMessage)  # the user's own text stays
+    # The user's text is deleted once the items are on the list.
+    deleted = session.last(DeleteMessage)
+    assert (deleted.chat_id, deleted.message_id) == (ALICE, 1)
+
+
+async def test_item_messages_are_kept_when_configured(mealie_mock):
+    client = MealieClient(BASE_URL, TOKEN)
+    session = RecordingSession()
+    bot = Bot("123456:placeholder", session=session)
+    dispatcher = build_dispatcher(settings(delete_item_messages=False), client)
+    mealie_mock.get("/api/households/shopping/lists").respond(
+        json={"items": [{"id": LIST_ID, "name": "Groceries"}]}
+    )
+    mealie_mock.get("/api/units").respond(json={"items": []})
+    mealie_mock.get("/api/foods").respond(json={"items": []})
+    mock_list(mealie_mock)
+    mealie_mock.post("/api/households/shopping/items/create-bulk").respond(
+        201, json={"createdItems": [make_item("n-1", "Eggs")]}
+    )
+    await dispatcher.feed_update(bot, message("eggs"))
+    assert session.sent(SendMessage) and not session.sent(DeleteMessage)
+    await client.aclose()
+
+
+async def test_item_message_stays_when_mealie_fails(harness, mealie_mock):
+    feed, session = harness
+    mock_list(mealie_mock)
+    mealie_mock.post("/api/households/shopping/items/create-bulk").respond(500)
+    await feed(message("eggs"))
+    assert "Mealie" in session.last(SendMessage).text
+    assert not session.sent(DeleteMessage)
+
+
+async def test_item_message_stays_when_delete_is_not_allowed(harness, mealie_mock):
+    feed, session = harness
+    mock_list(mealie_mock)
+    mealie_mock.post("/api/households/shopping/items/create-bulk").respond(
+        201, json={"createdItems": [make_item("n-1", "Eggs")]}
+    )
+    original = session.make_request
+
+    async def make_request(bot, method, timeout=None):
+        if isinstance(method, DeleteMessage):
+            session.calls.append(method)
+            raise TelegramBadRequest(method, "Bad Request: message can't be deleted")
+        return await original(bot, method, timeout)
+
+    session.make_request = make_request
+    await feed(message("eggs"))
+    assert session.sent(DeleteMessage)  # tried, failed quietly
+    assert "➕ <b>Added</b> (1)" in session.last(SendMessage).text
 
 
 async def test_undo_deletes_created_and_restores_merged_items(harness, mealie_mock):
@@ -198,6 +249,7 @@ async def test_unparseable_text(harness, mealie_mock):
     feed, session = harness
     await feed(message("   "))
     assert "could not find" in session.last(SendMessage).text
+    assert not session.sent(DeleteMessage)  # kept so the user can fix and resend it
 
 
 async def test_stranger_is_ignored(harness, mealie_mock):

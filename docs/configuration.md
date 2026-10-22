@@ -13,6 +13,7 @@ be read from a file by setting `<NAME>_FILE` (Docker or Compose secrets).
 | `SHOPPING_LIST` | no | first list | Default list, by name or ID |
 | `FEATURE_SHOPPING` | no | `true` | Enable the shopping list feature |
 | `DELETE_COMMANDS` | no | `true` | Delete your `/list`, `/lists`, `/clear` messages once handled; set `false` to keep them |
+| `DELETE_ITEM_MESSAGES` | no | `true` | Delete your item messages (`2 l milk, eggs`) once the items are on the list; set `false` to keep them |
 | `MEALIE_TIMEOUT` | no | `10` | Mealie request timeout in seconds |
 | `TZ` | no | UTC | Container time zone, e.g. `Europe/Berlin`; used for the "as of" time and history times |
 | `LOG_LEVEL` | no | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR` |

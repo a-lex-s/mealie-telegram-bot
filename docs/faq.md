@@ -38,6 +38,11 @@ The bot deletes `/list`, `/lists` and `/clear` after handling them so that only
 the list stays in the chat (`/start` and `/help` stay). Set
 `DELETE_COMMANDS=false` to keep them.
 
+**Where did the items I typed go?**
+Once the items are on the list, the bot deletes your message; the history entry
+records who added what. Messages that failed stay so you can fix and resend
+them. Set `DELETE_ITEM_MESSAGES=false` to keep all of them.
+
 **The times in the list are off.**
 Set the container's time zone with `TZ`, for example `TZ=Europe/Berlin`.
 

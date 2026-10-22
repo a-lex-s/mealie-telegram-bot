@@ -7,7 +7,10 @@ The chat is kept tidy around one *live* list message per chat:
   message is rewritten into a short history entry (or deleted when nothing
   changed).
 * Button taps edit the message in place and answer with a toast.
-* Bot commands are deleted after they were handled (``DELETE_COMMANDS``).
+* Bot commands are deleted after they were handled (``DELETE_COMMANDS``), and
+  so are messages that added items (``DELETE_ITEM_MESSAGES``): the history
+  entry already records what was added. A message that failed stays, so the
+  user can fix and resend it.
 """
 
 from __future__ import annotations
@@ -62,10 +65,15 @@ class ShoppingUI:
     """Keeps the live list message and history per chat and renders into Telegram."""
 
     def __init__(
-        self, service: ShoppingService, delete_commands: bool, clock: Clock = _local_now
+        self,
+        service: ShoppingService,
+        delete_commands: bool,
+        delete_item_messages: bool,
+        clock: Clock = _local_now,
     ) -> None:
         self.service = service
         self.delete_commands = delete_commands
+        self.delete_item_messages = delete_item_messages
         self.clock = clock
         self.chats: dict[int, ChatState] = {}
         # Undo data by (chat id, message id); removed once used or superseded.
@@ -152,9 +160,14 @@ class ShoppingUI:
     def record(self, chat_id: int, kind: str, user: str, items: list[str], count: int = 0) -> None:
         self.chat(chat_id).record(HistoryEvent(kind, user, self.clock(), items, count))
 
-    async def tidy(self, message: Message) -> None:
-        """Delete the user's command message once it has been handled."""
-        if self.delete_commands:
+    async def tidy(self, message: Message, *, items: bool = False) -> None:
+        """Delete the user's message once it has been handled, if configured.
+
+        Deleting may fail (e.g. in a group where the bot cannot delete others'
+        messages); the message then simply stays.
+        """
+        enabled = self.delete_item_messages if items else self.delete_commands
+        if enabled:
             with suppress(*_TELEGRAM_ERRORS):
                 await message.delete()
 
@@ -185,7 +198,11 @@ def _user_name(message_or_query: Message | CallbackQuery) -> str:
 
 def build_router(context: FeatureContext) -> Router:
     service = ShoppingService(context.mealie, default_list=context.settings.shopping_list)
-    ui = ShoppingUI(service, delete_commands=context.settings.delete_commands)
+    ui = ShoppingUI(
+        service,
+        delete_commands=context.settings.delete_commands,
+        delete_item_messages=context.settings.delete_item_messages,
+    )
     router = Router(name="shopping")
 
     async def send_error(target: Message, tr: Translator, exc: Exception) -> None:
@@ -269,6 +286,9 @@ def build_router(context: FeatureContext) -> Router:
         chat = ui.chat(message.chat.id)
         if chat.live_message_id is not None and result:
             ui.undo[(message.chat.id, chat.live_message_id)] = result
+        # Only now, after the items were added and the list shows them: the
+        # message is kept whenever something went wrong so it can be resent.
+        await ui.tidy(message, items=True)
 
     # --- buttons --------------------------------------------------------
 

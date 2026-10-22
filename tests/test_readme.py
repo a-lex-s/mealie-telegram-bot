@@ -64,6 +64,7 @@ def test_configuration_page_documents_every_setting() -> None:
         "BOT_LANGUAGE",
         "SHOPPING_LIST",
         "DELETE_COMMANDS",
+        "DELETE_ITEM_MESSAGES",
         "MEALIE_TIMEOUT",
         "TZ",
         "LOG_LEVEL",
