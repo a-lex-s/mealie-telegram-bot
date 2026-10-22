@@ -1,0 +1,4 @@
+*
+!requirements.txt
+!mealie_bot/
+**/__pycache__

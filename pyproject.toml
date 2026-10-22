@@ -1,0 +1,25 @@
+[project]
+name = "mealie-telegram-bot"
+version = "0.1.0"
+description = "Telegram bot front end for a self-hosted Mealie instance"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12,<3.13"
+# Exact, hash-locked versions live in requirements.txt (generated from this list).
+dependencies = [
+  "aiogram>=3.31,<4",
+  "httpx>=0.28,<0.29",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
