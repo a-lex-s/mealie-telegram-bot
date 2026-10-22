@@ -1,0 +1,37 @@
+# Example Compose service. Copy into the stack that already runs Mealie and
+# adjust the image tag, digest and network name.
+services:
+  mealie-telegram-bot:
+    image: ghcr.io/OWNER/mealie-telegram-bot:v0.1.0  # append @sha256:<digest> to pin
+    restart: unless-stopped
+    environment:
+      MEALIE_URL: http://mealie:9000
+      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+      MEALIE_API_TOKEN_FILE: /run/secrets/mealie_api_token
+      # Telegram user IDs of everyone allowed to use the bot (placeholders).
+      ALLOWED_USER_IDS: "123456789,987654321"
+      # Optional:
+      # BOT_LANGUAGE: de           # force one language for everybody
+      # SHOPPING_LIST: Groceries   # default list (name or ID); otherwise the first list
+      # FEATURE_SHOPPING: "true"
+      # LOG_LEVEL: INFO
+    secrets:
+      - telegram_bot_token
+      - mealie_api_token
+    networks:
+      - mealie
+    # No ports: the bot uses long polling and only talks to Telegram and Mealie.
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+
+secrets:
+  telegram_bot_token:
+    file: ./secrets/telegram_bot_token
+  mealie_api_token:
+    file: ./secrets/mealie_api_token
+
+networks:
+  mealie:
+    external: true
