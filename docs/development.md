@@ -1,0 +1,58 @@
+# Development
+
+Setting up the environment, running the checks, adding a language or a feature
+module and the pull request rules are described in
+[CONTRIBUTING.md](../CONTRIBUTING.md). This page covers running the bot itself
+on your machine and cutting a release.
+
+## Running locally
+
+Requires Python 3.12 and a virtual environment with the dependencies installed
+(see [CONTRIBUTING.md](../CONTRIBUTING.md#development-setup)). The same commands
+work under WSL.
+
+Put the tokens into `secrets/telegram_bot_token` and `secrets/mealie_api_token`
+(the `secrets/` directory is ignored by git) and start the bot against a Mealie
+on `localhost`. With bash or zsh:
+
+```sh
+export TELEGRAM_BOT_TOKEN_FILE=./secrets/telegram_bot_token
+export MEALIE_API_TOKEN_FILE=./secrets/mealie_api_token
+export MEALIE_URL=http://localhost:9000
+export ALLOWED_USER_IDS=123456789
+python -m mealie_bot
+```
+
+With fish:
+
+```fish
+source .venv/bin/activate.fish
+set -x TELEGRAM_BOT_TOKEN_FILE ./secrets/telegram_bot_token
+set -x MEALIE_API_TOKEN_FILE ./secrets/mealie_api_token
+set -x MEALIE_URL http://localhost:9000
+set -x ALLOWED_USER_IDS 123456789
+python -m mealie_bot
+```
+
+To run the container instead of the venv against a Mealie on `localhost`, use
+the commented variant in [compose.example.yml](../compose.example.yml)
+(`network_mode: host`).
+
+To check the Mealie client against your own instance, download
+`<MEALIE_URL>/openapi.json` and run:
+
+```sh
+MEALIE_OPENAPI=path/to/openapi.json pytest tests/test_openapi_paths.py
+```
+
+## Releases
+
+1. Bump `version` in `pyproject.toml` and `__version__` in `mealie_bot/__init__.py`,
+   move the "Unreleased" entries of [CHANGELOG.md](../CHANGELOG.md) under the
+   new version, and merge that pull request.
+2. Tag the merge commit on `main` and push the tag:
+   `git tag v0.1.0 && git push origin v0.1.0`.
+3. The release workflow runs CI, checks that the tag matches the version in
+   `pyproject.toml`, then publishes
+   `ghcr.io/a-lex-s/mealie-telegram-bot:v0.1.0` (and `:v0.1`). The image digest
+   is shown in the workflow summary; deploy by tag and digest.
