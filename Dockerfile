@@ -8,6 +8,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
+# Static OCI labels; the release workflow adds source, version, revision and created.
+LABEL org.opencontainers.image.title="mealie-telegram-bot" \
+      org.opencontainers.image.description="Telegram bot front end for a self-hosted Mealie instance" \
+      org.opencontainers.image.licenses="MIT"
+
 WORKDIR /app
 
 # Hash-locked dependencies; the build fails if anything does not match.

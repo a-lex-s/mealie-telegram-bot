@@ -41,7 +41,8 @@ class Translator:
         return template.format(**kwargs) if kwargs else template
 
     def command(self, key: str) -> str:
-        return CATALOGS[self.language].COMMANDS[key][0]
+        commands: dict[str, tuple[str, str]] = CATALOGS[self.language].COMMANDS
+        return commands[key][0]
 
 
 def command_names(key: str) -> tuple[str, ...]:

@@ -34,7 +34,10 @@ Run the checks that CI runs:
 
 ```sh
 ruff check . && ruff format --check .
+mypy
 pytest
+pip-audit --disable-pip --require-hashes -r requirements.txt
+zizmor .github/workflows
 ```
 
 To verify the Mealie client against your own instance, download its OpenAPI
@@ -75,7 +78,8 @@ MEALIE_OPENAPI=path/to/openapi.json pytest tests/test_openapi_paths.py
   The squash-merge title becomes the changelog entry, so make it descriptive.
 * Pull requests are squash-merged into `main`. No merge commits, no force
   pushes to `main`.
-* CI must be green: ruff, pytest, gitleaks and the Docker build.
+* CI must be green: ruff, mypy, pytest, pip-audit, zizmor, gitleaks and the Docker
+  build with its Trivy scan.
 * Fill in the pull request template; it lists the checks above.
 
 ## Adding a language

@@ -12,12 +12,18 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   image:
-    name: Build and push image
+    name: Build, push and attest image
     needs: ci
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
+      packages: write # push image to GHCR
+      id-token: write # sign the build provenance (Sigstore)
+      attestations: write # store the attestation on GitHub
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      tags: ${{ steps.meta.outputs.tags }}
+      image: ${{ steps.name.outputs.image }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -29,6 +35,9 @@ jobs:
             echo "::error::Tag ${GITHUB_REF_NAME} does not match pyproject version ${version}"
             exit 1
           fi
+      - id: name
+        name: Image name
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/mealie-telegram-bot" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -38,10 +47,15 @@ jobs:
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ghcr.io/${{ github.repository_owner }}/mealie-telegram-bot
+          images: ${{ steps.name.outputs.image }}
           tags: |
             type=semver,pattern=v{{version}}
             type=semver,pattern=v{{major}}.{{minor}}
+          labels: |
+            org.opencontainers.image.title=mealie-telegram-bot
+            org.opencontainers.image.description=Telegram bot front end for a self-hosted Mealie instance
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.vendor=${{ github.repository_owner }}
       - id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -53,6 +67,25 @@ jobs:
           annotations: ${{ steps.meta.outputs.annotations }}
           provenance: mode=max
           sbom: true
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ steps.name.outputs.image }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - name: Generate SBOM (SPDX)
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: ${{ steps.name.outputs.image }}@${{ steps.build.outputs.digest }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom
+          path: sbom.spdx.json
+          if-no-files-found: error
       - name: Summary
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
@@ -65,3 +98,48 @@ jobs:
             for tag in $TAGS; do echo "${tag}@${DIGEST}"; done
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    name: GitHub release
+    needs: image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sbom
+      - name: Create release with notes and SBOM
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ needs.image.outputs.image }}
+          DIGEST: ${{ needs.image.outputs.digest }}
+          TAGS: ${{ needs.image.outputs.tags }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          {
+            echo "## Container image"
+            echo
+            echo '```'
+            for tag in $TAGS; do echo "${tag}@${DIGEST}"; done
+            echo '```'
+            echo
+            echo "linux/amd64 only. Verify the build provenance before deploying:"
+            echo
+            echo '```'
+            echo "gh attestation verify oci://${IMAGE}@${DIGEST} --owner ${OWNER}"
+            echo '```'
+            echo
+            echo "The attached \`sbom.spdx.json\` is the SPDX SBOM of this image."
+            echo
+          } > notes.md
+          gh release create "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --verify-tag \
+            --title "${GITHUB_REF_NAME}" \
+            --notes-file notes.md \
+            --generate-notes \
+            sbom.spdx.json

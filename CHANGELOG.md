@@ -20,5 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker image for linux/amd64 published to GHCR on `v*` tags.
 - Community files: security policy, contributing guide, code of conduct,
   issue and pull request templates.
+- Release hardening: GitHub release with generated notes and SPDX SBOM, signed
+  build provenance attestation, OCI image labels; mypy, pip-audit, zizmor,
+  Trivy and OpenSSF Scorecard in CI.
 
 [Unreleased]: https://github.com/a-lex-s/mealie-telegram-bot/commits/main

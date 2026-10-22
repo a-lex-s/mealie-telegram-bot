@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
   workflow_call:
+  schedule:
+    # Weekly run so new advisories (pip-audit, Trivy) surface without a code change.
+    - cron: "17 5 * * 1"
 
 permissions:
   contents: read
@@ -26,8 +29,44 @@ jobs:
         run: |
           ruff check .
           ruff format --check .
+      - name: Mypy
+        run: mypy
       - name: Pytest
         run: pytest -q
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install --require-hashes -r requirements-dev.txt
+      - name: pip-audit
+        run: |
+          pip-audit --disable-pip --require-hashes --strict --progress-spinner off -r requirements.txt
+          pip-audit --disable-pip --require-hashes --strict --progress-spinner off -r requirements-dev.txt
+
+  zizmor:
+    name: Workflow audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install --require-hashes -r requirements-dev.txt
+      - name: zizmor
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: zizmor --min-severity low .github/workflows
 
   gitleaks:
     name: Secret scan
@@ -72,3 +111,11 @@ jobs:
           echo "$output"
           # Without configuration the bot must refuse to start with exit code 2.
           test "$status" -eq 2 && grep -q "Configuration error" <<<"$output"
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: mealie-telegram-bot:ci
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH

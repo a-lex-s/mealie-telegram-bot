@@ -1,0 +1,5 @@
+rules:
+  self-repository:
+    # Keep the plain ./ path for the reusable CI workflow.
+    ignore:
+      - release.yml

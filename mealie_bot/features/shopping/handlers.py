@@ -33,6 +33,13 @@ from mealie_bot.mealie import MealieError, MealieNotFound
 log = logging.getLogger(__name__)
 
 
+def sender_id(message: Message) -> int:
+    """Telegram user id of the sender; AccessMiddleware already dropped anonymous updates."""
+    if message.from_user is None:
+        raise ValueError("message has no sender")
+    return message.from_user.id
+
+
 def build_router(context: FeatureContext) -> Router:
     service = ShoppingService(context.mealie, default_list=context.settings.shopping_list)
     router = Router(name="shopping")
@@ -64,7 +71,7 @@ def build_router(context: FeatureContext) -> Router:
     @router.message(Command(*command_names("list")))
     async def cmd_list(message: Message, tr: Translator) -> None:
         try:
-            await show_list(message, message.from_user.id, tr, VIEW_OPEN)
+            await show_list(message, sender_id(message), tr, VIEW_OPEN)
         except (MealieError, NoShoppingListError) as exc:
             await send_error(message, tr, exc)
 
@@ -74,7 +81,7 @@ def build_router(context: FeatureContext) -> Router:
             lists = await service.lists()
             if not lists:
                 raise NoShoppingListError
-            active = await service.active_list(message.from_user.id)
+            active = await service.active_list(sender_id(message))
         except (MealieError, NoShoppingListError) as exc:
             await send_error(message, tr, exc)
             return
@@ -94,7 +101,7 @@ def build_router(context: FeatureContext) -> Router:
     @router.message(Command(*command_names("clear")))
     async def cmd_clear(message: Message, tr: Translator) -> None:
         try:
-            shopping_list = await service.active_list(message.from_user.id)
+            shopping_list = await service.active_list(sender_id(message))
             count = await service.clear_checked(shopping_list["id"])
         except (MealieError, NoShoppingListError) as exc:
             await send_error(message, tr, exc)
@@ -109,7 +116,7 @@ def build_router(context: FeatureContext) -> Router:
             if not entries:
                 await message.answer(tr("error.not_understood"))
                 return
-            shopping_list = await service.active_list(message.from_user.id)
+            shopping_list = await service.active_list(sender_id(message))
             await service.add_entries(shopping_list["id"], entries)
         except (MealieError, NoShoppingListError) as exc:
             await send_error(message, tr, exc)
