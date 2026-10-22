@@ -30,7 +30,20 @@ No. Unknown foods are stored as a note on the item; unknown units are kept as
 part of the note; lists must exist in Mealie.
 
 **Changes made in Mealie do not show up in Telegram.**
-Tap *Refresh* or send `/list` again. There are no push notifications in version 1.
+Tap *Refresh* (or any button) or send `/list` again. There are no push
+notifications in version 1.
+
+**Where did my `/list` message go?**
+The bot deletes command messages after handling them so that only the list
+stays in the chat. Set `DELETE_COMMANDS=false` to keep them.
+
+**The times in the list are off.**
+Set the container's time zone with `TZ`, for example `TZ=Europe/Berlin`.
+
+**What are the small "📜" messages above the list?**
+History entries. When the list moves to the bottom of the chat, the old list
+message is rewritten into a summary of who added, ticked off or removed what.
+Changes within 15 minutes share one entry.
 
 **Can I add recipes or a meal plan?**
 Not yet. Version 1 is the shopping list only; the module structure leaves room

@@ -13,6 +13,7 @@ def test_defaults():
     settings = Settings.from_env(BASE)
     assert settings.mealie_url == "http://mealie:9000"
     assert settings.allowed_user_ids == {1001, 1002}
+    assert settings.delete_commands is True
     assert settings.features == {"shopping"}
     assert settings.bot_language is None
     assert settings.log_level == "INFO"
@@ -75,8 +76,10 @@ def test_options():
             "FEATURE_SHOPPING": "false",
             "SHOPPING_LIST": "Groceries",
             "LOG_LEVEL": "debug",
+            "DELETE_COMMANDS": "no",
         }
     )
+    assert settings.delete_commands is False
     assert settings.mealie_url == "https://mealie.example.com"
     assert settings.bot_language == "de"
     assert settings.features == frozenset()

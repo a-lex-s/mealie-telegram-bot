@@ -22,6 +22,8 @@ services:
       # BOT_LANGUAGE: de           # force one language for everybody
       # SHOPPING_LIST: Groceries   # default list (name or ID); otherwise the first list
       # FEATURE_SHOPPING: "true"
+      # DELETE_COMMANDS: "true"   # delete /list etc. after handling; "false" keeps them
+      # TZ: Europe/Berlin          # time zone for the "as of" and history times
       # LOG_LEVEL: INFO
     secrets:
       - telegram_bot_token

@@ -1,70 +1,129 @@
+from datetime import datetime
+
 from mealie_bot.features.shopping.parser import ParsedEntry
 from mealie_bot.features.shopping.render import (
     MAX_ITEM_BUTTONS,
+    NO_LABEL,
+    VIEW_CLEAR,
     VIEW_DONE,
-    VIEW_OPEN,
     ItemAction,
+    ListAction,
+    ListState,
+    UndoInfo,
     entry_display,
     format_quantity,
     item_display,
+    item_html,
+    progress_bar,
     render_list,
 )
 from mealie_bot.i18n import Translator
 from tests.conftest import make_item
 
 EN = Translator("en")
+DE = Translator("de")
+NOW = datetime(2026, 1, 1, 21, 4)
 
 
 def button_texts(markup):
     return [b.text for row in markup.inline_keyboard for b in row]
 
 
-def test_open_view_groups_by_label():
+def rows(markup):
+    return [[b.text for b in row] for row in markup.inline_keyboard]
+
+
+def test_collapsed_by_default_with_category_headers():
     items = [
         make_item("1", "Apples", label="Fruit", position=2),
         make_item("2", "Soap"),
         make_item("3", "Bananas", label="Fruit", position=1),
         make_item("4", "Milk", checked=True),
     ]
-    text, markup = render_list("Groceries", items, VIEW_OPEN, EN)
-    assert "3 open" in text
-    assert button_texts(markup) == [
-        "— Fruit —",
-        "⬜ Bananas",
-        "⬜ Apples",
-        "— Other —",
-        "⬜ Soap",
-        "🔄 Refresh",
-        "✅ Ticked off (1)",
+    text, markup = render_list("Groceries", items, ListState(), EN, now=NOW)
+    assert "🛒 <b>Groceries</b>" in text
+    assert "3 open · 1 done" in text
+    assert "<code>▰▰▱▱▱▱▱▱▱▱</code>" in text  # 1 of 4 done
+    assert "<blockquote expandable>✅ <b>Done</b> (1)\n<s>Milk</s></blockquote>" in text
+    assert "<i>As of 21:04</i>" in text
+    assert button_texts(markup) == ["▸ Fruit · 2", "▸ Other · 1", "🔄 Refresh", "✅ Done (1)"]
+    toggle = ListAction.unpack(markup.inline_keyboard[0][0].callback_data)
+    assert (toggle.action, toggle.arg) == ("toggle", "l-Fruit")
+    assert ListAction.unpack(markup.inline_keyboard[1][0].callback_data).arg == NO_LABEL
+
+
+def test_expanded_category_lists_items_in_position_order():
+    items = [
+        make_item("1", "Apples", label="Fruit", position=2),
+        make_item("2", "Soap"),
+        make_item("3", "Bananas", label="Fruit", position=1),
     ]
+    _, markup = render_list("G", items, ListState(expanded={"l-Fruit"}), EN)
+    assert rows(markup)[:3] == [["▾ Fruit · 2"], ["Bananas", "Apples"], ["▸ Other · 1"]]
     data = ItemAction.unpack(markup.inline_keyboard[1][0].callback_data)
-    assert (data.action, data.item_id, data.view) == ("check", "3", VIEW_OPEN)
+    assert (data.action, data.item_id) == ("check", "3")
 
 
-def test_no_label_headers_for_single_group():
-    _, markup = render_list("L", [make_item("1", "Soap")], VIEW_OPEN, EN)
-    assert button_texts(markup)[0] == "⬜ Soap"
+def test_single_group_needs_no_header_and_is_open():
+    _, markup = render_list("L", [make_item("1", "Soap")], ListState(), EN)
+    assert rows(markup)[0] == ["Soap"]
+
+
+def test_short_names_share_a_row():
+    names = ["Eggs", "Butter", "Quark", "Milk", "Something rather long", "Medium length"]
+    items = [make_item(str(i), name) for i, name in enumerate(names)]
+    _, markup = render_list("L", items, ListState(), EN)
+    assert rows(markup)[:-1] == [
+        ["Eggs", "Butter", "Quark"],
+        ["Milk"],
+        ["Medium length"],
+        ["Something rather long"],
+    ]
+
+
+def test_added_quote_and_undo_button():
+    added = [make_item("9", "", note="Flour", quantity=500, unit={"name": "g"}, label="Baking")]
+    state = ListState(expanded={"l-Baking"}, added=added, undo=UndoInfo(created_ids=["9"]))
+    text, markup = render_list("G", [*added, make_item("1", "Soap")], state, EN)
+    assert "➕ <b>Added</b> (1)\n<b>Flour</b> <i>500 g</i> <i>· Baking</i>" in text
+    assert button_texts(markup)[-2:] == ["↩️ Undo", "✅ Done (0)"]
+    assert ListAction.unpack(markup.inline_keyboard[-1][0].callback_data).action == "undo"
 
 
 def test_done_view_offers_uncheck_and_clear():
     items = [make_item("1", "Milk", checked=True), make_item("2", "Eggs")]
-    text, markup = render_list("Groceries", items, VIEW_DONE, EN)
-    assert "1 ticked off" in text
-    texts = button_texts(markup)
-    assert texts[0] == "↩️ Milk"
-    assert "🧹 Remove ticked off (1)" in texts
+    text, markup = render_list("Groceries", items, ListState(view=VIEW_DONE), EN)
+    assert "1 done" in text
+    assert rows(markup) == [["Milk"], ["⬅️ Open (1)", "🧹 Remove (1)"]]
     assert ItemAction.unpack(markup.inline_keyboard[0][0].callback_data).action == "uncheck"
+    assert ListAction.unpack(markup.inline_keyboard[1][1].callback_data).action == "clear_ask"
+
+
+def test_clear_question_lists_items_and_asks():
+    items = [make_item("1", "Milk", checked=True), make_item("2", "Eggs", checked=True)]
+    text, markup = render_list("G", items, ListState(view=VIEW_CLEAR), DE)
+    assert "2 erledigte Einträge aus G entfernen?" in text
+    assert "<s>Milk</s> · <s>Eggs</s>" in text
+    assert rows(markup) == [["🧹 Ja, entfernen", "Abbrechen"]]
+    assert ListAction.unpack(markup.inline_keyboard[0][0].callback_data).action == "clear"
+
+
+def test_clear_question_without_checked_items_falls_back_to_done_view():
+    text, _ = render_list("G", [make_item("1", "Eggs")], ListState(view=VIEW_CLEAR), EN)
+    assert "No ticked-off items" in text
 
 
 def test_empty_list_and_escaping():
-    text, _ = render_list("<b>&", [], VIEW_OPEN, Translator("de"))
+    text, _ = render_list("<b>&", [], ListState(), DE)
     assert "&lt;b&gt;&amp;" in text
     assert "Nichts zu kaufen" in text
+    text, _ = render_list("G", [make_item("1", "x", checked=True)], ListState(), DE)
+    assert "Alles gekauft" in text and "▰▰▰▰▰▰▰▰▰▰" in text
 
 
 def test_long_lists_are_capped():
-    items = [make_item(str(i), f"item {i}") for i in range(MAX_ITEM_BUTTONS + 5)]
-    text, markup = render_list("L", items, VIEW_OPEN, EN)
+    items = [make_item(str(i), f"item number {i}") for i in range(MAX_ITEM_BUTTONS + 5)]
+    text, markup = render_list("L", items, ListState(), EN)
     assert "5 more" in text
     assert sum(len(row) for row in markup.inline_keyboard) <= 100
 
@@ -72,16 +131,27 @@ def test_long_lists_are_capped():
 def test_callback_data_fits_telegram_limit():
     uuid = "12345678-1234-4234-8234-123456789012"
     assert len(ItemAction(action="uncheck", item_id=uuid, view=VIEW_DONE).pack().encode()) <= 64
+    assert len(ListAction(action="toggle", arg=uuid).pack().encode()) <= 64
 
 
-def test_item_display_fallback():
+def test_item_display_puts_name_first():
     item = make_item("1", "", quantity=2, unit={"name": "Liter"}, food={"name": "Milch"})
-    assert item_display(item, "de") == "2 Liter Milch"
+    assert item_display(item, "de") == "Milch · 2 Liter"
+    assert item_html(item, "de") == "<b>Milch</b> <i>2 Liter</i>"
     assert item_display(make_item("2", "", note="Soap"), "en") == "Soap"
+    assert item_display(make_item("3", "", quantity=3, note="Lemons"), "en") == "Lemons · 3"
+    assert item_display(make_item("4", "legacy display"), "en") == "legacy display"
+    with_note = make_item("5", "", food={"name": "Flour"}, note="type 405")
+    assert item_display(with_note, "en") == "Flour, type 405"
+    abbreviated = make_item(
+        "6", "", quantity=500, unit={"name": "Gramm", "abbreviation": "g", "useAbbreviation": True}
+    )
+    assert item_display(abbreviated, "de") == "? · 500 g"
 
 
-def test_quantity_format():
+def test_quantities_and_entries():
     assert format_quantity(1.5, "de") == "1,5"
-    assert format_quantity(1.5, "en") == "1.5"
-    assert format_quantity(2.0, "de") == "2"
-    assert entry_display(ParsedEntry("Milch", 1.5, "l"), "de") == "1,5 l Milch"
+    assert format_quantity(2.0, "en") == "2"
+    assert entry_display(ParsedEntry("milk", 2, "l"), "en") == "2 l milk"
+    assert progress_bar(0, 0) == "▱" * 10
+    assert progress_bar(1, 3) == "▰▰▰▱▱▱▱▱▱▱"

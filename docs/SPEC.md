@@ -53,7 +53,9 @@ bot at start-up with exit code 2 and a message that never contains secret values
 | `BOT_LANGUAGE` | no | per user | Force one language (`en`, `de`) for everybody |
 | `SHOPPING_LIST` | no | first list | Default shopping list, by name (case-insensitive) or ID |
 | `FEATURE_SHOPPING` | no | `true` | Enable the shopping list feature |
+| `DELETE_COMMANDS` | no | `true` | Delete the user's command messages (`/list` …) once handled, so only the list stays in the chat |
 | `MEALIE_TIMEOUT` | no | `10` | HTTP timeout for Mealie requests in seconds |
+| `TZ` | no | UTC | Time zone of the container; used for the "as of" time in list messages and history entries |
 | `LOG_LEVEL` | no | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR` |
 
 The Mealie token acts as one Mealie user; everything the bot adds appears in
@@ -84,11 +86,19 @@ Mealie as done by that user. Its household determines which lists are visible.
 
 | Key | English | German | Action |
 |---|---|---|---|
-| start | `/start` | `/start` | Short introduction |
+| start | `/start` | `/start` | Short introduction with an expandable tips block |
 | help | `/help` | `/hilfe` | Usage help of all enabled features |
-| list | `/list` | `/liste` | Show open items of the active list |
+| list | `/list` | `/liste` | Show the active list |
 | lists | `/lists` | `/listen` | Choose the active list |
-| clear | `/clear` | `/aufraeumen` | Delete all ticked-off items of the active list |
+| clear | `/clear` | `/aufraeumen` | Delete all ticked-off items of the active list, after confirmation |
+
+The command menu, the bot description and the short description ("What can this
+bot do?") are published per language at start-up (`setMyCommands`,
+`setMyDescription`, `setMyShortDescription`).
+
+With `DELETE_COMMANDS=true` (default) the bot deletes the user's command message
+after it has been handled, so the chat holds only the list and the history.
+Plain text messages that add items are never deleted.
 
 ### 6.2 Active list
 
@@ -96,6 +106,9 @@ The active list of a user is, in this order: the list the user picked with
 `/lists`, the list named by `SHOPPING_LIST`, the first list by name. The choice
 made with `/lists` is kept in memory and resets when the bot restarts. If Mealie
 has no shopping list, the bot says so; it never creates lists.
+
+`/lists` shows one button per list, the active one marked with `●`. Choosing a
+list turns that message into the live list message (see 6.4).
 
 ### 6.3 Adding items
 
@@ -129,32 +142,88 @@ Matching against Mealie (per entry):
    creates foods or units in Mealie.
 
 All entries of one message are created in a single bulk request. Mealie itself
-merges a new item into an existing unchecked item with the same food/unit/note.
+merges a new item into an existing unchecked item with the same food/unit/note
+and reports both in the response (`createdItems`, `updatedItems`).
 
-The bot confirms with the entries as typed and a button to show the list.
+While Mealie is asked, the bot shows "typing…". It then shows the list (6.4)
+directly below the user's message with:
 
-### 6.4 Showing and ticking off
+* an expandable quote **Added (n)** listing what Mealie stored, as
+  `<b>name</b> <i>quantity</i> · label`, so merges and categories are visible;
+* the categories of the added items expanded;
+* an **Undo** button in place of *Refresh*. Undo deletes the created items and
+  restores the previous version of merged items (quantity before the merge),
+  then the button turns back into *Refresh*. Undo data is kept in memory for
+  the current list message only.
 
-* `/list` shows the active list as a message with one button per open item,
-  grouped by label (alphabetically, items without label last as "Other"),
-  ordered by Mealie's position within a group. Label headers are shown only if
-  there is more than one group.
-* Item texts use Mealie's `display` field; if it is empty, the bot builds one
-  from quantity, unit, food and note.
-* Tapping an item ticks it off in Mealie and refreshes the message in place.
-* "Ticked off (n)" switches to the ticked-off items (newest first); tapping one
-  puts it back on the list. "Remove ticked off (n)" deletes them in Mealie.
-* "Refresh" reloads the list. Changes made in Mealie or by the other person show
-  up on refresh; there is no push notification in version 1.
+### 6.4 The live list message
+
+Each chat has one *live* list message. It is the single place where the list
+is shown; the bot edits it in place instead of posting new messages.
+
+* `/list`, choosing a list, adding items and the confirmation flow all render
+  into the live message. If anything was posted below it since (a user
+  message, an error), the list is sent again at the bottom of the chat and the
+  old message becomes a history entry or is deleted (6.6).
+* Text: `🛒 <b>list</b>`, a progress bar in monospace (`▰▰▰▱▱▱▱▱▱▱`, ten cells,
+  ticked-off share of all items) with `n open · m done`, an expandable quote
+  **Done (m)** with the ticked-off items struck through, and `<i>As of HH:MM</i>`
+  (container local time). Empty list: "Nothing to buy. 🎉"; everything ticked
+  off: "Everything bought. 🎉".
+* Keyboard: one header button per label (`▸ Label · n` collapsed, `▾ Label · n`
+  expanded), labels alphabetical with unlabelled items last as "Other". All
+  categories start collapsed; tapping a header toggles it for that message. A
+  list with a single category shows its items directly without a header.
+* Items of an expanded category are buttons labelled `name · quantity`
+  (`Mehl · 500 g`; quantity 1 without unit is omitted). Short names share a
+  row (up to three of at most 10 characters, two of at most 18 characters),
+  longer names get their own row. Items without a food use their note as name.
+* Tapping an item ticks it off in Mealie, answers with a toast (`✓ Mehl · 500 g`)
+  and refreshes the message in place.
+* **Done (m)** switches the message to the ticked-off items (newest first), with
+  the same button packing; tapping one puts it back (toast "… is back on the
+  list"). **Open (n)** switches back, **Remove (m)** asks for confirmation.
+* **Refresh** reloads the list. Changes made in Mealie or by the other person
+  show up on refresh or with the next action; there is no push notification.
 * At most 80 items are shown as buttons (Telegram allows 100 per message); the
   rest is counted in the text.
-* If an item no longer exists when tapped, the bot says so and refreshes.
+* If an item no longer exists when tapped, the bot says so in a toast and refreshes.
 
-### 6.5 Errors
+### 6.5 Removing ticked-off items
+
+`/clear` and **Remove (m)** show a confirmation in the list message: the
+ticked-off items struck through in a quote, the hint that this deletes them
+from Mealie, and the buttons **Yes, remove** / **Cancel**. *Yes* deletes them
+in Mealie and shows the open list with a toast; *Cancel* just shows the open
+list. With nothing to remove, the done view is shown instead.
+
+### 6.6 History
+
+When the live list moves to the bottom of the chat, the previous list message
+is not simply deleted:
+
+* If anything changed since the last history entry (items added, ticked off,
+  put back, removed or undone), the old message is rewritten into a compact
+  history entry: `<i>📜 list</i>` followed by one line per change,
+  `<i>HH:MM · first name</i> ➕ items` (`✅` ticked off, `↩️` put back,
+  `🧹 n removed`, `↩️ n undone`). Consecutive changes of the same kind by the
+  same person are merged into one line; at most 8 item names are listed per
+  line and 12 lines per entry.
+* If the previous history entry is less than 15 minutes old, the new changes
+  are appended to that entry instead and the old list message is deleted.
+* If nothing changed, the old list message is deleted.
+
+History entries therefore accumulate above the live list and move up as the
+chat grows. The history lives in memory and starts fresh after a restart.
+
+### 6.7 Errors
 
 If Mealie cannot be reached or returns an error, the user gets a short message
-("Mealie is not reachable right now") and details go to the log without tokens.
-The bot starts even if Mealie is down and retries with each user action.
+("Mealie is not reachable right now") for commands and text, or an alert-style
+toast for button taps; details go to the log without tokens. Requests that are
+safe to repeat (`GET`, `PUT`, `DELETE`) are retried once after half a second on
+connection errors; `POST` (bulk create) is not, to avoid duplicates. The bot
+starts even if Mealie is down and retries with each user action.
 
 ## 7. Mealie API usage
 
@@ -167,9 +236,9 @@ Verified against the OpenAPI document of Mealie v3.29.0. Authentication:
 | All shopping lists | `GET /api/households/shopping/lists?perPage=-1&orderBy=name&orderDirection=asc` |
 | One list with items | `GET /api/households/shopping/lists/{item_id}` (`listItems`) |
 | Read one item | `GET /api/households/shopping/items/{item_id}` |
-| Add items | `POST /api/households/shopping/items/create-bulk` (array of `ShoppingListItemCreate`) |
+| Add items | `POST /api/households/shopping/items/create-bulk` (array of `ShoppingListItemCreate`; the response `ShoppingListItemsCollectionOut` with `createdItems`/`updatedItems` feeds the "Added" quote and Undo) |
 | Tick off / put back | `PUT /api/households/shopping/items/{item_id}` (`ShoppingListItemUpdate`) |
-| Delete ticked-off items | `DELETE /api/households/shopping/items?ids=…&ids=…` |
+| Delete ticked-off items, undo added items | `DELETE /api/households/shopping/items?ids=…&ids=…` |
 | Find foods | `GET /api/foods?search=…&perPage=20` |
 | Units | `GET /api/units?perPage=-1` |
 
@@ -215,5 +284,5 @@ OpenAPI file when `MEALIE_OPENAPI` points to one.
 
 * `features/recipes`: search recipes, add a recipe's ingredients to the list.
 * `features/mealplan`: show and edit the week's meal plan.
-* Possibly: remember the active list across restarts, notify the other person
-  about changes.
+* Possibly: remember the active list, history and undo data across restarts,
+  notify the other person about changes.
