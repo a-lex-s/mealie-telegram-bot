@@ -1,0 +1,45 @@
+name: Bug report
+description: Something does not work as described in docs/SPEC.md
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please remove anything personal before submitting: tokens, Telegram IDs,
+        host names and real names. Use placeholders such as `example.com` and `Alice`.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you do, what did you expect, and what happened instead?
+      placeholder: |
+        1. Sent "2 l milk" to the bot
+        2. Expected the item on the list
+        3. The bot replied with ...
+    validations:
+      required: true
+  - type: input
+    id: bot-version
+    attributes:
+      label: Bot version
+      description: Image tag or commit, for example `v0.1.0`
+    validations:
+      required: true
+  - type: input
+    id: mealie-version
+    attributes:
+      label: Mealie version
+      placeholder: "3.29.0"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Set `LOG_LEVEL=DEBUG` if needed. Tokens are never logged, but check anyway.
+      render: text
+  - type: input
+    id: language
+    attributes:
+      label: Bot language
+      placeholder: en / de

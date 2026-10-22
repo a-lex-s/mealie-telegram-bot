@@ -1,0 +1,27 @@
+name: Feature request
+description: Suggest an improvement to the shopping list helper
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Version 1 covers shopping lists only. Recipe and meal plan features are
+        planned as later modules; ideas for them are welcome but will wait.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is awkward or missing today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: How should the bot behave? Example messages help.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
