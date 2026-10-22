@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from mealie_bot.features.shopping.parser import ParsedEntry
 from mealie_bot.i18n import unit_synonyms
@@ -61,6 +61,22 @@ class UnitResolver:
                     if spelling in self._by_spelling:
                         return self._by_spelling[spelling]
         return None
+
+
+@dataclass(frozen=True)
+class AddResult:
+    """Outcome of one bulk create: new items, merged items and their old versions."""
+
+    created: list[JSON] = field(default_factory=list)
+    updated: list[JSON] = field(default_factory=list)
+    previous: list[JSON] = field(default_factory=list)
+
+    @property
+    def items(self) -> list[JSON]:
+        return self.created + self.updated
+
+    def __bool__(self) -> bool:
+        return bool(self.created or self.previous)
 
 
 @dataclass(frozen=True)
@@ -154,19 +170,44 @@ class ShoppingService:
                 item["labelId"] = food["labelId"]
         return item
 
-    async def add_entries(self, list_id: str, entries: list[ParsedEntry]) -> None:
-        items = [await self.build_item(list_id, entry) for entry in entries]
-        if items:
-            await self._client.create_items(items)
+    async def add_entries(self, list_id: str, entries: list[ParsedEntry]) -> AddResult:
+        """Create the entries in one bulk request and return what Mealie did with them.
 
-    async def set_checked(self, item_id: str, checked: bool) -> None:
+        Mealie merges an entry into an existing unchecked item with the same
+        food/unit/note; those come back as ``updated`` together with the
+        previous version, so the change can be undone.
+        """
+        items = [await self.build_item(list_id, entry) for entry in entries]
+        if not items:
+            return AddResult()
+        before = {item["id"]: item for item in (await self.view(list_id)).items}
+        result = await self._client.create_items(items) or {}
+        created = list(result.get("createdItems") or [])
+        updated = list(result.get("updatedItems") or [])
+        previous = [before[item["id"]] for item in updated if item["id"] in before]
+        return AddResult(created=created, updated=updated, previous=previous)
+
+    async def undo_add(self, result: AddResult) -> int:
+        """Revert one ``add_entries`` call. Returns the number of entries reverted."""
+        await self._client.delete_items([item["id"] for item in result.created])
+        for item in result.previous:
+            payload = {key: item[key] for key in _UPDATE_FIELDS if key in item}
+            await self._client.update_item(item["id"], payload)
+        return len(result.created) + len(result.previous)
+
+    async def set_checked(self, item_id: str, checked: bool) -> JSON:
+        """Tick an item off (or put it back) and return the item as it was before."""
         current = await self._client.get_item(item_id)
         payload = {key: current[key] for key in _UPDATE_FIELDS if key in current}
         payload["checked"] = checked
         await self._client.update_item(item_id, payload)
+        return current
 
-    async def clear_checked(self, list_id: str) -> int:
-        view = await self.view(list_id)
-        ids = [item["id"] for item in view.items if item.get("checked")]
-        await self._client.delete_items(ids)
-        return len(ids)
+    async def checked_items(self, list_id: str) -> list[JSON]:
+        return [item for item in (await self.view(list_id)).items if item.get("checked")]
+
+    async def clear_checked(self, list_id: str) -> list[JSON]:
+        """Delete all ticked-off items and return them."""
+        items = await self.checked_items(list_id)
+        await self._client.delete_items([item["id"] for item in items])
+        return items

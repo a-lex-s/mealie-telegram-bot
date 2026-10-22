@@ -55,7 +55,7 @@ def test_resolve_language(code, override, expected):
 
 
 def test_translator_formats():
-    assert "Alice" in Translator("de")("shopping.list_selected", list="Alice")
+    assert "Alice" in Translator("de")("shopping.toast_checked", item="Alice")
 
 
 def test_command_names_cover_all_languages():

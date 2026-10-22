@@ -6,6 +6,7 @@ Responses are returned as plain dicts (camelCase keys, as Mealie sends them).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -14,6 +15,11 @@ import httpx
 log = logging.getLogger(__name__)
 
 JSON = dict[str, Any]
+
+# Idempotent methods are retried once after a connection problem (Mealie restarting,
+# a dropped connection). POST is not: a repeated create-bulk would duplicate items.
+_RETRY_METHODS = frozenset({"GET", "PUT", "DELETE"})
+RETRY_DELAY_SECONDS = 0.5
 
 
 class MealieError(Exception):
@@ -48,7 +54,7 @@ class MealieClient:
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         try:
-            response = await self._http.request(method, path, **kwargs)
+            response = await self._send(method, path, **kwargs)
         except httpx.HTTPError as exc:
             # The exception text never contains the Authorization header.
             raise MealieError(f"{method} {path} failed: {type(exc).__name__}") from None
@@ -67,6 +73,16 @@ class MealieClient:
         if not isinstance(data, dict):
             raise MealieError(f"{method} {path}: unexpected response body")
         return data
+
+    async def _send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        try:
+            return await self._http.request(method, path, **kwargs)
+        except httpx.TransportError as exc:
+            if method not in _RETRY_METHODS:
+                raise
+            log.info("Retrying %s %s after %s", method, path, type(exc).__name__)
+            await asyncio.sleep(RETRY_DELAY_SECONDS)
+            return await self._http.request(method, path, **kwargs)
 
     # --- app / user -------------------------------------------------------
 

@@ -69,21 +69,22 @@ def menu_commands(features: list[Feature], language: str) -> list[BotCommand]:
     return [BotCommand(command=catalog[key][0], description=catalog[key][1]) for key in keys]
 
 
+async def _publish(bot: Bot, features: list[Feature], language: str, code: str | None) -> None:
+    tr = Translator(language)
+    await bot.set_my_commands(
+        menu_commands(features, language), scope=BotCommandScopeDefault(), language_code=code
+    )
+    await bot.set_my_description(tr("bot.description"), language_code=code)
+    await bot.set_my_short_description(tr("bot.short_description"), language_code=code)
+
+
 async def register_commands(bot: Bot, settings: Settings) -> None:
-    """Publish the command menu: one per catalog language, or only the forced one."""
+    """Publish menu commands and bot description per catalog language (or the forced one)."""
     features = enabled_features(settings)
     if settings.bot_language:
-        await bot.set_my_commands(
-            menu_commands(features, settings.bot_language), scope=BotCommandScopeDefault()
-        )
+        await _publish(bot, features, settings.bot_language, None)
         return
-    await bot.set_my_commands(
-        menu_commands(features, DEFAULT_LANGUAGE), scope=BotCommandScopeDefault()
-    )
+    await _publish(bot, features, DEFAULT_LANGUAGE, None)
     for language in CATALOGS:
         if language != DEFAULT_LANGUAGE:
-            await bot.set_my_commands(
-                menu_commands(features, language),
-                scope=BotCommandScopeDefault(),
-                language_code=language,
-            )
+            await _publish(bot, features, language, language)

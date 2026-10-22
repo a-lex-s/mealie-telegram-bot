@@ -21,11 +21,14 @@ in Telegram. Recipes and meal plans may follow as separate, optional modules.
 
 ## How it looks
 
-| Alice adds items | Bob ticks them off | Ticked-off items |
+| The list | A category opened | Alice adds items |
 |---|---|---|
-| ![Alice sends "2 l milk, 500 g flour, eggs"; the bot confirms and offers a "Show list" button](docs/images/add-items.svg) | ![/list shows open items grouped by label with one button per item](docs/images/list-open.svg) | ![Ticked-off items can be put back or removed](docs/images/list-done.svg) |
+| ![/list shows the list with a progress bar, collapsed categories and the done items in a quote](docs/images/list-collapsed.svg) | ![A tapped category shows its items as buttons, short names sharing a row](docs/images/list-expanded.svg) | ![Alice sends "500 g flour, baking powder, 3 lemons"; the list follows with an "Added" quote and an Undo button](docs/images/add-items.svg) |
 
-Mockups of the bot's messages; names and items are placeholders.
+Mockups of the bot's messages; names and items are placeholders. The chat stays
+tidy: there is one live list message that the bot edits in place, taps answer
+with short toasts, and when the list moves down the old message turns into a
+compact history entry (`21:12 · Alice ➕ flour · 500 g, baking powder`).
 
 ## Quick start
 
@@ -60,14 +63,15 @@ prints the image digest so you can pin it. All settings are listed in
 | Command | German | What it does |
 |---|---|---|
 | `/start` | `/start` | Short introduction |
-| `/list` | `/liste` | Show open items; tap one to tick it off |
+| `/list` | `/liste` | Show the list; tap a category to open it, tap an item to tick it off |
 | `/lists` | `/listen` | Choose which shopping list to use |
-| `/clear` | `/aufraeumen` | Remove ticked-off items |
+| `/clear` | `/aufraeumen` | Remove ticked-off items (asks first) |
 | `/help` | `/hilfe` | Show help |
 
 Any other text message is added to the list, one item per line or separated by
 commas. Quantities and units are optional and may come first or last:
-`2 l milk`, `milk 2l`, `3x lemons`, `eggs 6`.
+`2 l milk`, `milk 2l`, `3x lemons`, `eggs 6`. The list then appears right below
+your message with what was added and an *Undo* button.
 
 ## Documentation
 

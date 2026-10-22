@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="496" viewBox="0 0 360 496" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+<title>The list: progress bar, collapsed categories, done items in a quote</title>
+<rect width="360" height="496" rx="20" fill="#f4f4f5"/>
+<rect width="360" height="56" fill="#2a7fcf"/>
+<circle cx="34" cy="28" r="16" fill="#fff" opacity="0.9"/><text x="34" y="33" font-size="16" text-anchor="middle">🛒</text>
+<text x="62" y="25" font-size="15" font-weight="600" fill="#fff">Mealie Bot</text>
+<text x="62" y="42" font-size="12" fill="#d8e8f7">bot</text>
+<text x="344" y="84" font-size="11" text-anchor="end" fill="#999" text-decoration="line-through">/list</text><text x="344" y="98" font-size="10" text-anchor="end" fill="#aaa">deleted after handling</text>
+<rect x="16" y="106" width="320" height="174" rx="14" fill="#fff" stroke="#e5e5e5"/><text x="28" y="126" font-size="12" font-weight="600" fill="#2a7fcf">Mealie Bot</text>
+<text x="28" y="146" font-size="14" font-weight="600" fill="#111">🛒 Groceries</text>
+<text x="28" y="166" font-size="13" font-family="Menlo, Consolas, monospace" fill="#111">▰▰▰▱▱▱▱▱▱▱  7 open · 3 done</text>
+<text x="28" y="186" font-size="12" font-style="italic" fill="#777">As of 21:04</text>
+<rect x="28" y="200" width="296" height="82" rx="6" fill="#f1f7f3"/><rect x="28" y="200" width="3" height="82" rx="1.5" fill="#2a7fcf"/><text x="40" y="214" font-size="12" font-weight="600" fill="#111">✅ Done (3)</text><text x="314" y="214" font-size="10" text-anchor="end" fill="#2a7fcf">▲</text>
+<text x="40" y="232" font-size="12" fill="#444">bread</text>
+<text x="40" y="250" font-size="12" fill="#444">butter</text>
+<text x="40" y="268" font-size="12" fill="#444">tomatoes · 2 cans</text>
+<rect x="16.0" y="286" width="320.0" height="34" rx="8" fill="#eef1ee"/><text x="28.0" y="308" font-size="13" text-anchor="start" fill="#556">▸ Baking · 2</text>
+<rect x="16.0" y="326" width="320.0" height="34" rx="8" fill="#eef1ee"/><text x="28.0" y="348" font-size="13" text-anchor="start" fill="#556">▸ Dairy · 3</text>
+<rect x="16.0" y="366" width="320.0" height="34" rx="8" fill="#eef1ee"/><text x="28.0" y="388" font-size="13" text-anchor="start" fill="#556">▸ Fruit &amp; vegetables · 1</text>
+<rect x="16.0" y="406" width="320.0" height="34" rx="8" fill="#eef1ee"/><text x="28.0" y="428" font-size="13" text-anchor="start" fill="#556">▸ Other · 1</text>
+<rect x="16.0" y="446" width="157.0" height="34" rx="8" fill="#eaf3fb"/><text x="94.5" y="468" font-size="13" text-anchor="middle" fill="#2a7fcf">🔄 Refresh</text>
+<rect x="179.0" y="446" width="157.0" height="34" rx="8" fill="#eaf3fb"/><text x="257.5" y="468" font-size="13" text-anchor="middle" fill="#2a7fcf">✅ Done (3)</text>
+</svg>

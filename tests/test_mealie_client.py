@@ -70,3 +70,22 @@ async def test_empty_body_is_an_error_for_json_endpoints(client, mealie_mock):
     mealie_mock.get("/api/users/self").respond(204)
     with pytest.raises(MealieError):
         await client.get_self()
+
+
+async def test_idempotent_requests_are_retried_once(client, mealie_mock, monkeypatch):
+    import mealie_bot.mealie.client as module
+
+    monkeypatch.setattr(module, "RETRY_DELAY_SECONDS", 0)
+    route = mealie_mock.get("/api/units")
+    route.side_effect = [httpx.ConnectError("boom"), httpx.Response(200, json={"items": [1]})]
+    assert await client.get_units() == [1]
+    assert route.call_count == 2
+
+
+async def test_create_is_not_retried(client, mealie_mock):
+    route = mealie_mock.post("/api/households/shopping/items/create-bulk").mock(
+        side_effect=httpx.ConnectError("boom")
+    )
+    with pytest.raises(MealieError):
+        await client.create_items([{"note": "x"}])
+    assert route.call_count == 1

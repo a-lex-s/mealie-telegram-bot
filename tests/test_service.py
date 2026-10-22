@@ -121,13 +121,43 @@ async def test_units_are_cached(client, mealie_mock):
     assert route.call_count == 2
 
 
-async def test_add_entries_posts_bulk(service, mealie_mock):
+async def test_add_entries_posts_bulk_and_reports_merges(service, mealie_mock):
     mealie_mock.get("/api/units").respond(json={"items": UNITS})
     mealie_mock.get("/api/foods").respond(json={"items": []})
-    route = mealie_mock.post("/api/households/shopping/items/create-bulk").respond(201, json={})
-    await service.add_entries(LIST_ID, [ParsedEntry("a"), ParsedEntry("b")])
+    existing = make_item("old", "a", quantity=1)
+    mealie_mock.get(f"/api/households/shopping/lists/{LIST_ID}").respond(
+        json={"id": LIST_ID, "name": "Groceries", "listItems": [existing]}
+    )
+    route = mealie_mock.post("/api/households/shopping/items/create-bulk").respond(
+        201,
+        json={
+            "createdItems": [make_item("new", "b")],
+            "updatedItems": [{**existing, "quantity": 2}],
+        },
+    )
+    result = await service.add_entries(LIST_ID, [ParsedEntry("a"), ParsedEntry("b")])
     body = json.loads(route.calls.last.request.content)
     assert [i["note"] for i in body] == ["a", "b"]
+    assert [i["id"] for i in result.items] == ["new", "old"]
+    assert result.previous == [existing]
+    assert result
+
+
+async def test_add_nothing(service, mealie_mock):
+    assert not await service.add_entries(LIST_ID, [])
+
+
+async def test_undo_add(service, mealie_mock):
+    from mealie_bot.features.shopping.service import AddResult
+
+    previous = make_item("old", "a", quantity=1, recipeReferences=[])
+    delete = mealie_mock.delete("/api/households/shopping/items").respond(json={})
+    put = mealie_mock.put("/api/households/shopping/items/old").respond(json={})
+    result = AddResult(created=[make_item("new", "b")], updated=[previous], previous=[previous])
+    assert await service.undo_add(result) == 2
+    assert delete.calls.last.request.url.params.get_list("ids") == ["new"]
+    body = json.loads(put.calls.last.request.content)
+    assert body["quantity"] == 1 and "groupId" not in body
 
 
 async def test_set_checked_sends_full_update(service, mealie_mock):
@@ -141,7 +171,7 @@ async def test_set_checked_sends_full_update(service, mealie_mock):
     )
     mealie_mock.get("/api/households/shopping/items/i-1").respond(json=current)
     route = mealie_mock.put("/api/households/shopping/items/i-1").respond(json={})
-    await service.set_checked("i-1", True)
+    assert await service.set_checked("i-1", True) == current
     body = json.loads(route.calls.last.request.content)
     assert body["checked"] is True
     assert body["unitId"] == "u-l"
@@ -158,5 +188,5 @@ async def test_clear_checked(service, mealie_mock):
         }
     )
     route = mealie_mock.delete("/api/households/shopping/items").respond(json={"message": "ok"})
-    assert await service.clear_checked(LIST_ID) == 1
+    assert [i["id"] for i in await service.clear_checked(LIST_ID)] == ["a"]
     assert route.calls.last.request.url.params.get_list("ids") == ["a"]
