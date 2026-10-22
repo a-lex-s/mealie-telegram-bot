@@ -10,10 +10,6 @@ ROOT = Path(__file__).resolve().parent.parent
 README = (ROOT / "README.md").read_text(encoding="utf-8")
 PAGES = [ROOT / "README.md", *sorted((ROOT / "docs").glob("*.md"))]
 
-# Files that live in a separate pull request; links to them are allowed to dangle
-# until that pull request is merged.
-COMMUNITY_FILES = {"SECURITY.md", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md", "CHANGELOG.md"}
-
 _LINK = re.compile(r"\]\(([^)\s]+)\)")
 
 
@@ -29,11 +25,7 @@ def _relative_links(text: str) -> list[str]:
 @pytest.mark.parametrize("page", PAGES, ids=lambda p: p.name)
 def test_relative_links_point_to_existing_files(page: Path) -> None:
     links = _relative_links(page.read_text(encoding="utf-8"))
-    missing = [
-        link
-        for link in links
-        if Path(link).name not in COMMUNITY_FILES and not (page.parent / link).exists()
-    ]
+    missing = [link for link in links if not (page.parent / link).exists()]
     assert not missing, f"broken links in {page.name}: {missing}"
 
 
@@ -53,8 +45,6 @@ def test_anchor_links_point_to_existing_headings(page: Path) -> None:
         if target.startswith(("http://", "https://", "mailto:")) or "#" not in target:
             continue
         path, anchor = target.split("#", 1)
-        if path and Path(path).name in COMMUNITY_FILES:
-            continue
         other = (page.parent / path).read_text(encoding="utf-8") if path else text
         if anchor not in _headings(other):
             missing.append(target)
