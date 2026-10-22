@@ -6,6 +6,12 @@ updates:
       interval: weekly
     commit-message:
       prefix: "build(deps)"
+    groups:
+      # pydantic pins an exact pydantic-core version; bump them together.
+      pydantic:
+        patterns:
+          - "pydantic"
+          - "pydantic-core"
   - package-ecosystem: docker
     directory: /
     schedule:
