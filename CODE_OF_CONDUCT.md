@@ -34,10 +34,7 @@ may remove, edit or reject comments, commits, code, issues and other
 contributions that do not follow this Code of Conduct.
 
 Instances of abusive, harassing or otherwise unacceptable behaviour may be
-reported to the maintainers through GitHub: open an issue, or, for matters that
-should stay private, use GitHub's
-[report abuse](https://docs.github.com/en/communities/maintaining-your-safety-on-github/reporting-abuse-or-spam)
-feature. All complaints are reviewed promptly and fairly, and the privacy of
+reported to the maintainers at <a-lex-s-393168336@proton.me>. All complaints are reviewed promptly and fairly, and the privacy of
 the reporter is respected.
 
 ## Scope

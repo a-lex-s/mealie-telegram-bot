@@ -45,10 +45,19 @@ def test_codeowners_entries_are_well_formed() -> None:
             assert re.fullmatch(r"@[\w.-]+(/[\w.-]+)?", owner), owner
 
 
-def test_security_policy_uses_private_reporting_not_email() -> None:
+PROJECT_CONTACT = "a-lex-s-393168336@proton.me"
+
+
+def test_security_policy_uses_private_reporting() -> None:
     text = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
     assert "/security/advisories/new" in text
-    assert not re.search(r"[\w.+-]+@[\w-]+\.[\w.-]+", text), "no email addresses"
+
+
+@pytest.mark.parametrize("name", ["SECURITY.md", "CODE_OF_CONDUCT.md", "CONTRIBUTING.md"])
+def test_only_the_project_contact_address_is_used(name: str) -> None:
+    text = (ROOT / name).read_text(encoding="utf-8")
+    emails = set(re.findall(r"[\w.+-]+@[\w-]+\.[\w.-]+", text))
+    assert emails <= {PROJECT_CONTACT}, emails
 
 
 def test_issue_forms_have_name_description_and_body() -> None:

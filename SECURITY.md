@@ -13,6 +13,8 @@ Use GitHub's private vulnerability reporting instead:
 [Report a vulnerability](https://github.com/a-lex-s/mealie-telegram-bot/security/advisories/new).
 This creates a private draft advisory that only the maintainers can see.
 
+If you cannot use GitHub, email <a-lex-s-393168336@proton.me> instead.
+
 Include what you found, how to reproduce it and which version or commit is
 affected. You should get a first response within a week. Once a fix is
 released, the advisory is published and you are credited unless you prefer
