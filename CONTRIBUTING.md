@@ -70,6 +70,8 @@ MEALIE_OPENAPI=path/to/openapi.json pytest tests/test_openapi_paths.py
   uv pip compile requirements-dev.in --python-version 3.12 --generate-hashes --no-header -o requirements-dev.txt
   ```
 
+  Run both commands together so the two files agree; CI and the image build
+  run `pip check` and fail when locked versions contradict each other.
   GitHub Actions are pinned to commit SHAs and the base image to a digest.
 
 ## Commits and pull requests
