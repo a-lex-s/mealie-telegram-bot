@@ -1,0 +1,172 @@
+"""Shopping list operations on top of the Mealie client."""
+
+from __future__ import annotations
+
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
+
+from mealie_bot.features.shopping.parser import ParsedEntry
+from mealie_bot.i18n import unit_synonyms
+from mealie_bot.mealie import MealieClient
+from mealie_bot.mealie.client import JSON
+
+# Fields accepted by PUT /api/households/shopping/items/{id} (ShoppingListItemUpdate).
+_UPDATE_FIELDS = (
+    "shoppingListId",
+    "quantity",
+    "note",
+    "display",
+    "checked",
+    "position",
+    "foodId",
+    "labelId",
+    "unitId",
+    "extras",
+    "recipeReferences",
+)
+
+
+class NoShoppingListError(Exception):
+    pass
+
+
+def _spellings(entity: JSON) -> set[str]:
+    """Every name Mealie knows a unit or food by, case-folded."""
+    names = {
+        entity.get(key) for key in ("name", "pluralName", "abbreviation", "pluralAbbreviation")
+    }
+    names.update(alias.get("name") for alias in entity.get("aliases") or [])
+    return {name.strip().casefold() for name in names if isinstance(name, str) and name.strip()}
+
+
+class UnitResolver:
+    """Maps what users type ("Liter", "l", "Stk") to a Mealie unit."""
+
+    def __init__(self, units: list[JSON], synonyms: dict[str, frozenset[str]]) -> None:
+        self._by_spelling: dict[str, JSON] = {}
+        for unit in units:
+            for spelling in _spellings(unit):
+                self._by_spelling.setdefault(spelling, unit)
+        self._synonyms = synonyms
+        self.known_tokens: frozenset[str] = frozenset(self._by_spelling).union(*synonyms.values())
+
+    def resolve(self, token: str) -> JSON | None:
+        folded = token.casefold()
+        if folded in self._by_spelling:
+            return self._by_spelling[folded]
+        for spellings in self._synonyms.values():
+            if folded in spellings:
+                for spelling in sorted(spellings):
+                    if spelling in self._by_spelling:
+                        return self._by_spelling[spelling]
+        return None
+
+
+@dataclass(frozen=True)
+class ListView:
+    id: str
+    name: str
+    items: list[JSON]
+
+
+class ShoppingService:
+    def __init__(
+        self,
+        client: MealieClient,
+        default_list: str | None = None,
+        unit_cache_seconds: float = 600,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._client = client
+        self._default_list = default_list
+        self._selected: dict[int, str] = {}
+        self._unit_cache_seconds = unit_cache_seconds
+        self._clock = clock
+        self._units: UnitResolver | None = None
+        self._units_loaded_at = 0.0
+
+    # --- lists ------------------------------------------------------------
+
+    async def lists(self) -> list[JSON]:
+        return await self._client.get_shopping_lists()
+
+    async def active_list(self, user_id: int) -> JSON:
+        lists = await self.lists()
+        if not lists:
+            raise NoShoppingListError
+        wanted = [self._selected.get(user_id), self._default_list]
+        for key in filter(None, wanted):
+            for shopping_list in lists:
+                if (
+                    key == shopping_list["id"]
+                    or key.casefold() == (shopping_list.get("name") or "").casefold()
+                ):
+                    return shopping_list
+        return lists[0]
+
+    def select_list(self, user_id: int, list_id: str) -> None:
+        self._selected[user_id] = list_id
+
+    async def view(self, list_id: str) -> ListView:
+        data = await self._client.get_shopping_list(list_id)
+        return ListView(
+            id=data["id"], name=data.get("name") or "", items=list(data.get("listItems") or [])
+        )
+
+    # --- items ------------------------------------------------------------
+
+    async def units(self) -> UnitResolver:
+        now = self._clock()
+        if self._units is None or now - self._units_loaded_at > self._unit_cache_seconds:
+            self._units = UnitResolver(await self._client.get_units(), unit_synonyms())
+            self._units_loaded_at = now
+        return self._units
+
+    async def find_food(self, name: str) -> JSON | None:
+        folded = name.casefold()
+        for food in await self._client.search_foods(name):
+            if folded in _spellings(food):
+                return food
+        return None
+
+    async def build_item(self, list_id: str, entry: ParsedEntry) -> JSON:
+        units = await self.units()
+        item: JSON = {
+            "shoppingListId": list_id,
+            "quantity": entry.quantity if entry.quantity is not None else 1,
+            "checked": False,
+            "note": "",
+        }
+        unit = units.resolve(entry.unit) if entry.unit else None
+        if entry.unit and unit is None:
+            # Unknown unit: keep everything as free text so nothing is lost.
+            item["note"] = f"{entry.unit} {entry.name}"
+            return item
+        if unit is not None:
+            item["unitId"] = unit["id"]
+        food = await self.find_food(entry.name)
+        if food is None:
+            item["note"] = entry.name
+        else:
+            item["foodId"] = food["id"]
+            if food.get("labelId"):
+                item["labelId"] = food["labelId"]
+        return item
+
+    async def add_entries(self, list_id: str, entries: list[ParsedEntry]) -> None:
+        items = [await self.build_item(list_id, entry) for entry in entries]
+        if items:
+            await self._client.create_items(items)
+
+    async def set_checked(self, item_id: str, checked: bool) -> None:
+        current = await self._client.get_item(item_id)
+        payload = {key: current[key] for key in _UPDATE_FIELDS if key in current}
+        payload["checked"] = checked
+        await self._client.update_item(item_id, payload)
+
+    async def clear_checked(self, list_id: str) -> int:
+        view = await self.view(list_id)
+        ids = [item["id"] for item in view.items if item.get("checked")]
+        await self._client.delete_items(ids)
+        return len(ids)

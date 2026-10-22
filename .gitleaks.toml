@@ -21,4 +21,6 @@ description = "Placeholder values used in docs and tests"
 regexes = [
   '''(?i)changeme''',
   '''(?i)example\.com''',
+  # False positive of generic-api-key on a class name.
+  '''I18nMiddleware''',
 ]
