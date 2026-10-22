@@ -4,7 +4,9 @@ The bot is designed to run next to Mealie in a private Compose network with no
 inbound port. In short:
 
 * **Reach**: it only talks to the Telegram Bot API (outbound long polling) and
-  to `MEALIE_URL`. No web server, no telemetry, no AI services.
+  to `MEALIE_URL`. No web server, no telemetry, no AI services. When Mealie is
+  not in the same private network, use an `https://` URL; certificates are
+  verified and the API token is sent with every request.
 * **Access**: only Telegram user IDs in `ALLOWED_USER_IDS` are served; every
   other update is dropped and the user ID is logged so an operator can add it.
 * **Secrets**: tokens come from environment variables or `*_FILE` secrets. They

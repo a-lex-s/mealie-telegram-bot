@@ -39,10 +39,12 @@ Docker with Compose, and a Telegram account.
    Mealie user for the bot keeps things tidy.
 3. **Find your Telegram user IDs**: message [@userinfobot](https://t.me/userinfobot)
    from every account that may use the bot.
-4. **Add the service** to the Compose stack that already runs Mealie. Copy
-   [compose.example.yml](compose.example.yml), set the image tag (and digest),
-   the network name and `ALLOWED_USER_IDS`, and put the two tokens into
-   `secrets/telegram_bot_token` and `secrets/mealie_api_token`.
+4. **Add the service**: copy [compose.example.yml](compose.example.yml), set
+   the image tag (and digest) and `ALLOWED_USER_IDS`, and put the two tokens
+   into `secrets/telegram_bot_token` and `secrets/mealie_api_token`. The file
+   has two variants: next to Mealie in the same Compose network
+   (`MEALIE_URL=http://mealie:9000`), or standalone on any host against a
+   Mealie reachable over HTTPS (`MEALIE_URL=https://mealie.example.com`).
 5. **Start it**: `docker compose up -d mealie-telegram-bot`. The log line
    `Connected to Mealie <version>` shows that the start-up check passed.
 6. **Try it**: open the chat with your bot, send `/start`, then

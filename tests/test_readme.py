@@ -103,6 +103,7 @@ def test_compose_example_has_localhost_variant() -> None:
     assert "MEALIE_URL: http://mealie:9000" in text
     assert "# network_mode: host" in text.replace("#   network_mode", "# network_mode")
     assert "http://localhost:9000" in text
+    assert "https://mealie.example.com" in text
     assert "@" not in text.replace("@sha256", "")
 
 

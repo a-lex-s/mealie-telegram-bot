@@ -1,11 +1,19 @@
-# Example Compose service. Copy into the stack that already runs Mealie and
-# adjust the image tag, digest and network name.
+# Example Compose file with three variants; keep the one you need.
+#
+# 1. Next to Mealie (default below): copy the service into the stack that
+#    already runs Mealie and adjust the image tag, digest and network name.
+# 2. Standalone: the bot runs on any host and reaches Mealie over HTTPS
+#    (reverse proxy with a valid certificate). Set MEALIE_URL to the public URL,
+#    drop the "networks" entries and the external network at the bottom.
+# 3. Local testing with Mealie on localhost: see the commented service further down.
 services:
   mealie-telegram-bot:
     image: ghcr.io/a-lex-s/mealie-telegram-bot:v0.1.0  # append @sha256:<digest> to pin
     restart: unless-stopped
     environment:
       MEALIE_URL: http://mealie:9000
+      # Standalone against a public Mealie instead (variant 2); the certificate is verified:
+      # MEALIE_URL: https://mealie.example.com
       TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
       MEALIE_API_TOKEN_FILE: /run/secrets/mealie_api_token
       # Telegram user IDs of everyone allowed to use the bot (placeholders).
@@ -18,7 +26,7 @@ services:
     secrets:
       - telegram_bot_token
       - mealie_api_token
-    networks:
+    networks:            # variant 1 only; remove for variant 2
       - mealie
     # No ports: the bot uses long polling and only talks to Telegram and Mealie.
     read_only: true
@@ -53,6 +61,6 @@ secrets:
   mealie_api_token:
     file: ./secrets/mealie_api_token
 
-networks:
+networks:              # variant 1 only; remove for variant 2
   mealie:
     external: true

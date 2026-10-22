@@ -7,6 +7,12 @@ No. The bot uses long polling, so it only makes outbound connections.
 Yes, but a dedicated user is better: everything the bot adds shows up in Mealie
 under that user, and you can revoke its token without touching your own.
 
+**Does Mealie have to run in the same Compose stack?**
+No. Set `MEALIE_URL` to any URL the bot can reach, for example
+`https://mealie.example.com` behind a reverse proxy. The TLS certificate is
+verified; self-signed certificates are not supported. The API token travels in
+every request, so use HTTPS for anything outside a private network.
+
 **Why does the bot ignore me?**
 Your Telegram user ID is not in `ALLOWED_USER_IDS`. The log shows the ID at
 `WARNING` level.
