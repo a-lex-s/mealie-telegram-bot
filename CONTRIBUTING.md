@@ -78,6 +78,10 @@ MEALIE_OPENAPI=path/to/openapi.json pytest tests/test_openapi_paths.py
   The squash-merge title becomes the changelog entry, so make it descriptive.
 * Pull requests are squash-merged into `main`. No merge commits, no force
   pushes to `main`.
+* No links to AI sessions or other private resources in commits, pull request
+  text or files. A `Co-Authored-By` trailer is fine. `.claude/settings.json`
+  configures this for Claude Code; check the pull request text before merging
+  because the squash commit takes it over.
 * CI must be green: ruff, mypy, pytest, pip-audit, zizmor, gitleaks and the Docker
   build with its Trivy scan.
 * Fill in the pull request template; it lists the checks above.
