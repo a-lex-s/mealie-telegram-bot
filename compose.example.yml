@@ -2,7 +2,7 @@
 # adjust the image tag, digest and network name.
 services:
   mealie-telegram-bot:
-    image: ghcr.io/OWNER/mealie-telegram-bot:v0.1.0  # append @sha256:<digest> to pin
+    image: ghcr.io/a-lex-s/mealie-telegram-bot:v0.1.0  # append @sha256:<digest> to pin
     restart: unless-stopped
     environment:
       MEALIE_URL: http://mealie:9000
@@ -25,6 +25,27 @@ services:
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
+
+  # Local testing variant: Mealie runs on the host (for example in WSL) and is
+  # reachable at http://localhost:9000. Comment out the service above, uncomment
+  # this one and the "networks" block below is not needed.
+  # mealie-telegram-bot-local:
+  #   build: .                      # or the same image as above
+  #   restart: unless-stopped
+  #   network_mode: host            # share the host network so localhost is Mealie
+  #   environment:
+  #     MEALIE_URL: http://localhost:9000
+  #     TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+  #     MEALIE_API_TOKEN_FILE: /run/secrets/mealie_api_token
+  #     ALLOWED_USER_IDS: "123456789"
+  #     LOG_LEVEL: DEBUG
+  #   secrets:
+  #     - telegram_bot_token
+  #     - mealie_api_token
+  #   read_only: true
+  #   cap_drop: [ALL]
+  #   security_opt:
+  #     - no-new-privileges:true
 
 secrets:
   telegram_bot_token:

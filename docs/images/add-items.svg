@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="328" viewBox="0 0 360 328" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+<title>Alice adds items to the shopping list</title>
+<rect width="360" height="328" rx="20" fill="#f4f4f5"/>
+<rect width="360" height="56" fill="#2a7fcf"/>
+<circle cx="34" cy="28" r="16" fill="#fff" opacity="0.9"/><text x="34" y="33" font-size="16" text-anchor="middle">🛒</text>
+<text x="62" y="25" font-size="15" font-weight="600" fill="#fff">Mealie Bot</text>
+<text x="62" y="42" font-size="12" fill="#d8e8f7">bot</text>
+<rect x="116" y="72" width="228" height="56" rx="14" fill="#e3fee0"/><text x="128" y="92" font-size="12" font-weight="600" fill="#3a9d4a">Alice</text><text x="128" y="114" font-size="14" fill="#111">2 l milk, 500 g flour, eggs</text>
+<rect x="16" y="140" width="230" height="122" rx="14" fill="#fff" stroke="#e5e5e5"/><text x="28" y="160" font-size="12" font-weight="600" fill="#2a7fcf">Mealie Bot</text>
+<text x="28" y="180" font-size="14" font-weight="600" fill="#111">Added to Groceries:</text>
+<text x="28" y="200" font-size="14" fill="#111">2 l milk</text>
+<text x="28" y="220" font-size="14" fill="#111">500 g flour</text>
+<text x="28" y="240" font-size="14" fill="#111">eggs</text>
+<rect x="16" y="268" width="230" height="34" rx="8" fill="#eaf3fb"/><text x="131" y="290" font-size="13" text-anchor="middle" fill="#2a7fcf">📋 Show list</text>
+</svg>
