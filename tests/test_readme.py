@@ -98,12 +98,16 @@ def test_mockups_use_placeholder_names_only() -> None:
     assert names <= {"Alice", "Bob"}, names
 
 
-def test_compose_example_has_localhost_variant() -> None:
+def test_compose_example_covers_all_deployment_variants() -> None:
     text = (ROOT / "compose.example.yml").read_text(encoding="utf-8")
-    assert "MEALIE_URL: http://mealie:9000" in text
-    assert "# network_mode: host" in text.replace("#   network_mode", "# network_mode")
-    assert "http://localhost:9000" in text
-    assert "https://mealie.example.com" in text
+    # One MEALIE_URL line per variant: same network, standalone over HTTPS, localhost.
+    urls = re.findall(r"^\s*#?\s*MEALIE_URL: (\S+)$", text, re.MULTILINE)
+    assert urls == [
+        "http://mealie:9000",
+        "https://mealie.example.com",
+        "http://localhost:9000",
+    ], urls
+    assert re.search(r"^\s*#\s*network_mode: host\b", text, re.MULTILINE)
     assert "@" not in text.replace("@sha256", "")
 
 
