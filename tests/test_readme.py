@@ -1,4 +1,4 @@
-"""Checks for README.md, compose.example.yml and the mockup images."""
+"""Checks for README.md, the docs/ pages, compose.example.yml and the mockup images."""
 
 import re
 from pathlib import Path
@@ -8,6 +8,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 README = (ROOT / "README.md").read_text(encoding="utf-8")
+PAGES = [ROOT / "README.md", *sorted((ROOT / "docs").glob("*.md"))]
 
 # Files that live in a separate pull request; links to them are allowed to dangle
 # until that pull request is merged.
@@ -16,36 +17,54 @@ COMMUNITY_FILES = {"SECURITY.md", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md", "CHAN
 _LINK = re.compile(r"\]\(([^)\s]+)\)")
 
 
-def _relative_links() -> list[str]:
+def _relative_links(text: str) -> list[str]:
     links = []
-    for target in _LINK.findall(README):
+    for target in _LINK.findall(text):
         if target.startswith(("http://", "https://", "#", "mailto:")):
             continue
         links.append(target.split("#", 1)[0])
     return links
 
 
-def test_relative_links_point_to_existing_files() -> None:
-    links = _relative_links()
-    assert links, "README has no relative links"
-    missing = [link for link in links if link not in COMMUNITY_FILES and not (ROOT / link).exists()]
-    assert not missing, f"broken links in README: {missing}"
+@pytest.mark.parametrize("page", PAGES, ids=lambda p: p.name)
+def test_relative_links_point_to_existing_files(page: Path) -> None:
+    links = _relative_links(page.read_text(encoding="utf-8"))
+    missing = [
+        link
+        for link in links
+        if Path(link).name not in COMMUNITY_FILES and not (page.parent / link).exists()
+    ]
+    assert not missing, f"broken links in {page.name}: {missing}"
 
 
-def test_anchor_links_point_to_existing_headings() -> None:
-    headings = {
+def _headings(text: str) -> set[str]:
+    return {
         re.sub(r"[^a-z0-9 -]", "", line.lstrip("#").strip().lower()).replace(" ", "-")
-        for line in README.splitlines()
+        for line in text.splitlines()
         if line.startswith("#")
     }
-    anchors = [t[1:] for t in _LINK.findall(README) if t.startswith("#")]
-    assert anchors
-    missing = [a for a in anchors if a not in headings]
-    assert not missing, f"broken anchors in README: {missing}"
 
 
-def test_readme_documents_every_setting() -> None:
+@pytest.mark.parametrize("page", PAGES, ids=lambda p: p.name)
+def test_anchor_links_point_to_existing_headings(page: Path) -> None:
+    text = page.read_text(encoding="utf-8")
+    missing = []
+    for target in _LINK.findall(text):
+        if target.startswith(("http://", "https://", "mailto:")) or "#" not in target:
+            continue
+        path, anchor = target.split("#", 1)
+        if path and Path(path).name in COMMUNITY_FILES:
+            continue
+        other = (page.parent / path).read_text(encoding="utf-8") if path else text
+        if anchor not in _headings(other):
+            missing.append(target)
+    assert not missing, f"broken anchors in {page.name}: {missing}"
+
+
+def test_configuration_page_documents_every_setting() -> None:
     from mealie_bot.config import KNOWN_FEATURES
+
+    page = (ROOT / "docs/configuration.md").read_text(encoding="utf-8")
 
     names = [
         "TELEGRAM_BOT_TOKEN",
@@ -58,7 +77,7 @@ def test_readme_documents_every_setting() -> None:
         "LOG_LEVEL",
     ] + [f"FEATURE_{name.upper()}" for name in KNOWN_FEATURES]
     for name in names:
-        assert f"`{name}`" in README, f"{name} is not documented in README"
+        assert f"`{name}`" in page, f"{name} is not documented in docs/configuration.md"
 
 
 @pytest.mark.parametrize("image", sorted((ROOT / "docs/images").glob("*.svg")))
@@ -85,3 +104,8 @@ def test_compose_example_has_localhost_variant() -> None:
     assert "# network_mode: host" in text.replace("#   network_mode", "# network_mode")
     assert "http://localhost:9000" in text
     assert "@" not in text.replace("@sha256", "")
+
+
+def test_readme_links_every_docs_page() -> None:
+    for page in (ROOT / "docs").glob("*.md"):
+        assert f"docs/{page.name}" in README, f"{page.name} is not linked from the README"
