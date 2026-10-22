@@ -1,0 +1,24 @@
+# gitleaks configuration.
+# Uses the built-in default rules and adds project-specific ones.
+title = "mealie-telegram-bot gitleaks config"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "telegram-bot-token"
+description = "Telegram bot token"
+regex = '''\b[0-9]{8,10}:[A-Za-z0-9_-]{35}\b'''
+
+[[rules]]
+id = "mealie-api-token"
+description = "Mealie long-lived API token (JWT)"
+regex = '''\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b'''
+keywords = ["eyj"]
+
+[allowlist]
+description = "Placeholder values used in docs and tests"
+regexes = [
+  '''(?i)changeme''',
+  '''(?i)example\.com''',
+]
