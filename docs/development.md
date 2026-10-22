@@ -55,18 +55,43 @@ the README shows the SVG mockup from `docs/images/`.
 
 ## Releases
 
+Only final versions are released (`vX.Y.Z`); pre-release tags such as
+`v0.2.0-rc1` fail the version check because PEP 440 spells them differently.
+
 1. Bump `version` in `pyproject.toml` and `__version__` in `mealie_bot/__init__.py`,
    move the "Unreleased" entries of [CHANGELOG.md](../CHANGELOG.md) under the
-   new version, and merge that pull request.
-2. Tag the merge commit on `main` and push the tag:
-   `git tag v0.1.0 && git push origin v0.1.0`.
-3. The release workflow runs CI, checks that the tag matches the version in
-   `pyproject.toml`, then publishes
-   `ghcr.io/a-lex-s/mealie-telegram-bot:v0.1.0` (and `:v0.1`, `linux/amd64`)
-   with OCI labels, a BuildKit SBOM and a signed build provenance attestation.
-   It then creates a GitHub release with generated notes, the image digest and
-   the SPDX SBOM (`sbom.spdx.json`) attached. Deploy by tag and digest.
-4. Verify an image before deploying it:
+   new version with a dated heading, add the `[X.Y.Z]` link at the bottom and
+   point `[Unreleased]` at `compare/vX.Y.Z...main`. Merge that pull request and
+   wait for CI on `main` to pass (a new advisory found by pip-audit or Trivy
+   would also stop the release).
+2. Tag the squash-merge commit on `main` and push the tag. Do not create the
+   release in the GitHub UI; the workflow creates it.
+
+   ```sh
+   git fetch origin main
+   git tag -a v0.1.0 -m "v0.1.0" origin/main
+   git push origin v0.1.0
+   ```
+
+3. The release workflow checks that the tag matches the version in
+   `pyproject.toml` and points to a commit on `main`, runs CI, then publishes
+   `ghcr.io/a-lex-s/mealie-telegram-bot:v0.1.0` (and `:v0.1`, `linux/amd64`, no
+   `latest`) with OCI labels, a BuildKit SBOM and a signed build provenance
+   attestation. It then creates the GitHub release with generated notes, the
+   image digest and the SPDX SBOM (`sbom.spdx.json`) attached. The job summary
+   prints every tag with its digest; deploy by tag and digest. Attestation
+   manifests show up as `unknown/unknown` entries in the GHCR package view,
+   that is expected.
+4. If the workflow fails before the image is pushed, fix the cause, delete the
+   tag (`git push --delete origin v0.1.0 && git tag -d v0.1.0`) and tag again.
+   If only the release job fails, use "Re-run failed jobs"; the release step
+   updates an existing release instead of failing. Avoid "Re-run all jobs"
+   after a successful run, it rebuilds the image and moves the tags to a new
+   digest.
+5. After the first release, open the package settings on GHCR and set the
+   package to public (new packages start private) so that deployments can pull
+   without a token.
+6. Verify an image before deploying it:
    `gh attestation verify oci://ghcr.io/a-lex-s/mealie-telegram-bot:v0.1.0 --owner a-lex-s`.
 
 The CI workflow also runs weekly so new advisories (pip-audit, Trivy) show up

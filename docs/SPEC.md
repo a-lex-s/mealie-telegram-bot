@@ -291,12 +291,13 @@ OpenAPI file when `MEALIE_OPENAPI` points to one.
   (CRITICAL/HIGH, fixed only) on every push to `main`, every pull request and
   weekly on a schedule. An OpenSSF Scorecard workflow uploads its results to
   code scanning.
-* A tag `vX.Y.Z` runs CI again, checks that the tag matches the version in
-  `pyproject.toml`, then builds and pushes
-  `ghcr.io/<owner>/mealie-telegram-bot:vX.Y.Z` (and `vX.Y`, `linux/amd64` only)
-  with OCI labels, BuildKit provenance and SBOM, and a GitHub build provenance
-  attestation pushed to the registry. A GitHub release is created with generated
-  notes, the image digest and the SPDX SBOM attached.
+* A tag `vX.Y.Z` first checks that the tag matches the version in
+  `pyproject.toml` and points to a commit on `main`, runs CI, then builds and
+  pushes `ghcr.io/<owner>/mealie-telegram-bot:vX.Y.Z` (and `vX.Y`, `linux/amd64`
+  only, no `latest` tag) with OCI labels, BuildKit provenance and SBOM, and a
+  GitHub build provenance attestation pushed to the registry. A GitHub release
+  is created, or updated on a re-run, with generated notes, the image digest
+  and the SPDX SBOM attached. Every job has a timeout.
 * Deployment happens elsewhere: the image is pulled by tag and digest into a
   Compose stack that shares a network with Mealie. See `compose.example.yml`.
 

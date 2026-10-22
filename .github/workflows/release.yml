@@ -8,13 +8,39 @@ permissions:
   contents: read
 
 jobs:
+  verify:
+    name: Verify tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check tag matches package version
+        run: |
+          version=$(python3 -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match pyproject version ${version}"
+            exit 1
+          fi
+      - name: Check tagged commit is on main
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/main; then
+            echo "::error::Tag ${GITHUB_REF_NAME} points to ${GITHUB_SHA}, which is not on main"
+            exit 1
+          fi
+
   ci:
+    needs: verify
     uses: ./.github/workflows/ci.yml
 
   image:
     name: Build, push and attest image
     needs: ci
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write # push image to GHCR
@@ -28,13 +54,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Check tag matches package version
-        run: |
-          version=$(python3 -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
-          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
-            echo "::error::Tag ${GITHUB_REF_NAME} does not match pyproject version ${version}"
-            exit 1
-          fi
       - id: name
         name: Image name
         run: echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/mealie-telegram-bot" >> "$GITHUB_OUTPUT"
@@ -48,6 +67,8 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ steps.name.outputs.image }}
+          # Only vX.Y.Z and vX.Y; no "latest", deployments pin a tag and digest.
+          flavor: latest=false
           tags: |
             type=semver,pattern=v{{version}}
             type=semver,pattern=v{{major}}.{{minor}}
@@ -103,16 +124,14 @@ jobs:
     name: GitHub release
     needs: image
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
-      contents: write # create the GitHub release
+      contents: write # create or update the GitHub release
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: sbom
-      - name: Create release with notes and SBOM
+      - name: Create or update release with notes and SBOM
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IMAGE: ${{ needs.image.outputs.image }}
@@ -120,6 +139,10 @@ jobs:
           TAGS: ${{ needs.image.outputs.tags }}
           OWNER: ${{ github.repository_owner }}
         run: |
+          # Generated notes come from the API so that a re-run or a release
+          # created by hand ends up with the same body as a fresh run.
+          generated=$(gh api --method POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+            -f tag_name="${GITHUB_REF_NAME}" --jq .body)
           {
             echo "## Container image"
             echo
@@ -135,11 +158,18 @@ jobs:
             echo
             echo "The attached \`sbom.spdx.json\` is the SPDX SBOM of this image."
             echo
+            echo "${generated}"
           } > notes.md
-          gh release create "${GITHUB_REF_NAME}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --verify-tag \
-            --title "${GITHUB_REF_NAME}" \
-            --notes-file notes.md \
-            --generate-notes \
-            sbom.spdx.json
+          if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "Release ${GITHUB_REF_NAME} exists, updating notes and SBOM"
+            gh release edit "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" \
+              --title "${GITHUB_REF_NAME}" --notes-file notes.md
+            gh release upload "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --clobber sbom.spdx.json
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --verify-tag \
+              --title "${GITHUB_REF_NAME}" \
+              --notes-file notes.md \
+              sbom.spdx.json
+          fi

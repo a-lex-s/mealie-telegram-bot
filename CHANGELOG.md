@@ -41,4 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   build provenance attestation, OCI image labels; mypy, pip-audit, zizmor,
   Trivy and OpenSSF Scorecard in CI.
 
+### Changed
+
+- Release workflow: the tag is checked against the package version and `main`
+  before CI runs, the GitHub release is created or updated so that a re-run
+  succeeds, no `latest` tag is pushed, and every CI job has a timeout.
+
 [Unreleased]: https://github.com/a-lex-s/mealie-telegram-bot/commits/main
