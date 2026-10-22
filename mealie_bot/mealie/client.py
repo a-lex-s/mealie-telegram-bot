@@ -62,13 +62,19 @@ class MealieClient:
             return None
         return response.json()
 
+    async def _request_json(self, method: str, path: str, **kwargs: Any) -> JSON:
+        data = await self._request(method, path, **kwargs)
+        if not isinstance(data, dict):
+            raise MealieError(f"{method} {path}: unexpected response body")
+        return data
+
     # --- app / user -------------------------------------------------------
 
     async def get_app_info(self) -> JSON:
-        return await self._request("GET", "/api/app/about")
+        return await self._request_json("GET", "/api/app/about")
 
     async def get_self(self) -> JSON:
-        return await self._request("GET", "/api/users/self")
+        return await self._request_json("GET", "/api/users/self")
 
     # --- shopping lists ---------------------------------------------------
 
@@ -81,20 +87,24 @@ class MealieClient:
         return list(data.get("items", []))
 
     async def get_shopping_list(self, list_id: str) -> JSON:
-        return await self._request("GET", f"/api/households/shopping/lists/{list_id}")
+        return await self._request_json("GET", f"/api/households/shopping/lists/{list_id}")
 
     # --- shopping list items ---------------------------------------------
 
     async def get_item(self, item_id: str) -> JSON:
-        return await self._request("GET", f"/api/households/shopping/items/{item_id}")
+        return await self._request_json("GET", f"/api/households/shopping/items/{item_id}")
 
     async def create_items(self, items: list[JSON]) -> JSON:
         """POST create-bulk; Mealie merges duplicates of unchecked items itself."""
-        return await self._request("POST", "/api/households/shopping/items/create-bulk", json=items)
+        return await self._request_json(
+            "POST", "/api/households/shopping/items/create-bulk", json=items
+        )
 
     async def update_item(self, item_id: str, item: JSON) -> JSON:
         """PUT replaces the whole item, so pass the complete current item."""
-        return await self._request("PUT", f"/api/households/shopping/items/{item_id}", json=item)
+        return await self._request_json(
+            "PUT", f"/api/households/shopping/items/{item_id}", json=item
+        )
 
     async def delete_items(self, item_ids: list[str]) -> None:
         if not item_ids:

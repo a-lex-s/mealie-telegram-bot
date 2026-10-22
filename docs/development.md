@@ -54,5 +54,13 @@ MEALIE_OPENAPI=path/to/openapi.json pytest tests/test_openapi_paths.py
    `git tag v0.1.0 && git push origin v0.1.0`.
 3. The release workflow runs CI, checks that the tag matches the version in
    `pyproject.toml`, then publishes
-   `ghcr.io/a-lex-s/mealie-telegram-bot:v0.1.0` (and `:v0.1`). The image digest
-   is shown in the workflow summary; deploy by tag and digest.
+   `ghcr.io/a-lex-s/mealie-telegram-bot:v0.1.0` (and `:v0.1`, `linux/amd64`)
+   with OCI labels, a BuildKit SBOM and a signed build provenance attestation.
+   It then creates a GitHub release with generated notes, the image digest and
+   the SPDX SBOM (`sbom.spdx.json`) attached. Deploy by tag and digest.
+4. Verify an image before deploying it:
+   `gh attestation verify oci://ghcr.io/a-lex-s/mealie-telegram-bot:v0.1.0 --owner a-lex-s`.
+
+The CI workflow also runs weekly so new advisories (pip-audit, Trivy) show up
+without a code change, and the OpenSSF Scorecard workflow reports to code
+scanning.

@@ -196,13 +196,18 @@ OpenAPI file when `MEALIE_OPENAPI` points to one.
 * Python 3.12, aiogram 3, httpx. Dependencies are pinned with hashes in
   `requirements.txt` (generated from `pyproject.toml`); the base image is pinned
   by digest; GitHub Actions are pinned by commit SHA.
-* CI (GitHub-hosted `ubuntu-latest` runners only) runs ruff, pytest, gitleaks on
-  the full history and a Docker build with a smoke test on every push to `main`
-  and every pull request.
+* CI (GitHub-hosted `ubuntu-latest` runners only) runs ruff, mypy (strict),
+  pytest, pip-audit on both lock files, zizmor on the workflows, gitleaks on the
+  full history and a Docker build with a smoke test and a Trivy scan
+  (CRITICAL/HIGH, fixed only) on every push to `main`, every pull request and
+  weekly on a schedule. An OpenSSF Scorecard workflow uploads its results to
+  code scanning.
 * A tag `vX.Y.Z` runs CI again, checks that the tag matches the version in
   `pyproject.toml`, then builds and pushes
-  `ghcr.io/<owner>/mealie-telegram-bot:vX.Y.Z` (and `vX.Y`) with provenance and
-  SBOM. The digest is printed in the job summary.
+  `ghcr.io/<owner>/mealie-telegram-bot:vX.Y.Z` (and `vX.Y`, `linux/amd64` only)
+  with OCI labels, BuildKit provenance and SBOM, and a GitHub build provenance
+  attestation pushed to the registry. A GitHub release is created with generated
+  notes, the image digest and the SPDX SBOM attached.
 * Deployment happens elsewhere: the image is pulled by tag and digest into a
   Compose stack that shares a network with Mealie. See `compose.example.yml`.
 
