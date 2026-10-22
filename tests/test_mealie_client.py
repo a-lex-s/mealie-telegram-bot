@@ -58,3 +58,15 @@ async def test_connection_error_hides_details(client, mealie_mock):
     with pytest.raises(MealieError) as info:
         await client.get_app_info()
     assert TOKEN not in str(info.value)
+
+
+async def test_unexpected_body_is_an_error(client, mealie_mock):
+    mealie_mock.get("/api/users/self").respond(json=["not", "an", "object"])
+    with pytest.raises(MealieError, match="unexpected response body"):
+        await client.get_self()
+
+
+async def test_empty_body_is_an_error_for_json_endpoints(client, mealie_mock):
+    mealie_mock.get("/api/users/self").respond(204)
+    with pytest.raises(MealieError):
+        await client.get_self()

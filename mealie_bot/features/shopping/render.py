@@ -60,9 +60,10 @@ def item_display(item: JSON, language: str) -> str:
     if quantity and (quantity != 1 or unit):
         parts.append(format_quantity(quantity, language))
     if unit:
-        parts.append(unit.get("abbreviation") if unit.get("useAbbreviation") else unit.get("name"))
+        unit_name = unit.get("abbreviation") if unit.get("useAbbreviation") else unit.get("name")
+        parts.append(str(unit_name or ""))
     if food:
-        parts.append(food.get("name"))
+        parts.append(str(food.get("name") or ""))
     if item.get("note"):
         parts.append(item["note"])
     return " ".join(p for p in parts if p) or "?"
