@@ -1,107 +1,89 @@
 # mealie-telegram-bot
 
+[![CI](https://github.com/a-lex-s/mealie-telegram-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/a-lex-s/mealie-telegram-bot/actions/workflows/ci.yml)
+[![Release](https://github.com/a-lex-s/mealie-telegram-bot/actions/workflows/release.yml/badge.svg)](https://github.com/a-lex-s/mealie-telegram-bot/actions/workflows/release.yml)
+[![Latest release](https://img.shields.io/github/v/release/a-lex-s/mealie-telegram-bot?include_prereleases&sort=semver)](https://github.com/a-lex-s/mealie-telegram-bot/releases)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue)](pyproject.toml)
+[![Mealie 3.29.0](https://img.shields.io/badge/Mealie-3.29.0-green)](docs/compatibility.md)
+[![License: MIT](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
+
 A Telegram bot that acts as a lightweight front end for a self-hosted
 [Mealie](https://mealie.io) instance.
 
-Version 1 is a shopping list helper: send items as a message, tick them off with
-a tap, and everyone sees the same list in Mealie and in Telegram. Recipes and
-meal plans may follow as separate, optional modules.
+Version 1 is a shopping list helper for a small household: send items as a
+message, tick them off with a tap, and everyone sees the same list in Mealie and
+in Telegram. Recipes and meal plans may follow as separate, optional modules.
 
 * English and German, chosen per user from the Telegram language
 * Understands quantities and units: `2 l milk`, `500g flour`, `milk 2l`, `3x lemons`
 * Uses Mealie's foods, units and labels, so items land in the right category
 * Long polling only: no open port, no web server, no telemetry, no AI calls
 
-The full behaviour is described in [docs/SPEC.md](docs/SPEC.md).
+## How it looks
+
+| Alice adds items | Bob ticks them off | Ticked-off items |
+|---|---|---|
+| ![Alice sends "2 l milk, 500 g flour, eggs"; the bot confirms and offers a "Show list" button](docs/images/add-items.svg) | ![/list shows open items grouped by label with one button per item](docs/images/list-open.svg) | ![Ticked-off items can be put back or removed](docs/images/list-done.svg) |
+
+Mockups of the bot's messages; names and items are placeholders.
+
+## Quick start
+
+You need a running Mealie instance (see [compatibility](docs/compatibility.md)),
+Docker with Compose, and a Telegram account.
+
+1. **Create a bot**: talk to [@BotFather](https://t.me/BotFather), send
+   `/newbot` and note the token.
+2. **Create a Mealie API token**: in Mealie, open the profile of the user the bot
+   should act as and create a long-lived token under *API tokens*. A dedicated
+   Mealie user for the bot keeps things tidy.
+3. **Find your Telegram user IDs**: message [@userinfobot](https://t.me/userinfobot)
+   from every account that may use the bot.
+4. **Add the service**: copy [compose.example.yml](compose.example.yml), set
+   the image tag (and digest) and `ALLOWED_USER_IDS`, and put the two tokens
+   into `secrets/telegram_bot_token` and `secrets/mealie_api_token`. The file
+   has two variants: next to Mealie in the same Compose network
+   (`MEALIE_URL=http://mealie:9000`), or standalone on any host against a
+   Mealie reachable over HTTPS (`MEALIE_URL=https://mealie.example.com`).
+5. **Start it**: `docker compose up -d mealie-telegram-bot`. The log line
+   `Connected to Mealie <version>` shows that the start-up check passed.
+6. **Try it**: open the chat with your bot, send `/start`, then
+   `2 l milk, eggs`, then `/list`.
+
+Images are published as `ghcr.io/a-lex-s/mealie-telegram-bot:<tag>` for
+`linux/amd64`; every [release](https://github.com/a-lex-s/mealie-telegram-bot/releases)
+prints the image digest so you can pin it. All settings are listed in
+[docs/configuration.md](docs/configuration.md).
 
 ## Usage
 
 | Command | German | What it does |
 |---|---|---|
+| `/start` | `/start` | Short introduction |
 | `/list` | `/liste` | Show open items; tap one to tick it off |
 | `/lists` | `/listen` | Choose which shopping list to use |
 | `/clear` | `/aufraeumen` | Remove ticked-off items |
 | `/help` | `/hilfe` | Show help |
 
-Any other text message is added to the list, one item per line or separated by commas.
+Any other text message is added to the list, one item per line or separated by
+commas. Quantities and units are optional and may come first or last:
+`2 l milk`, `milk 2l`, `3x lemons`, `eggs 6`.
 
-## Setup
+## Documentation
 
-1. Create a bot with [@BotFather](https://t.me/BotFather) and note the token.
-2. In Mealie, create an API token for the user the bot should act as
-   (user profile → API tokens).
-3. Find the Telegram user IDs of everyone who may use the bot
-   (for example by messaging [@userinfobot](https://t.me/userinfobot)).
-4. Add the service to the Compose stack that runs Mealie; see
-   [compose.example.yml](compose.example.yml). Put the two tokens into secret files.
-
-### Configuration
-
-Every variable can also be given as a file via `<NAME>_FILE`.
-
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `TELEGRAM_BOT_TOKEN` | yes | | Telegram bot token |
-| `MEALIE_API_TOKEN` | yes | | Mealie API token |
-| `ALLOWED_USER_IDS` | yes | | Comma-separated Telegram user IDs |
-| `MEALIE_URL` | no | `http://mealie:9000` | Mealie base URL |
-| `BOT_LANGUAGE` | no | per user | Force `en` or `de` |
-| `SHOPPING_LIST` | no | first list | Default list, by name or ID |
-| `FEATURE_SHOPPING` | no | `true` | Enable the shopping list feature |
-| `MEALIE_TIMEOUT` | no | `10` | Mealie request timeout in seconds |
-| `LOG_LEVEL` | no | `INFO` | Log level |
-
-## Development
-
-Requires Python 3.12.
-
-```sh
-python3.12 -m venv .venv
-. .venv/bin/activate
-pip install --require-hashes -r requirements-dev.txt
-pip install pre-commit && pre-commit install   # gitleaks + ruff before every commit
-
-ruff check . && ruff format --check .
-pytest
-
-# Check the client against your Mealie's OpenAPI document (/openapi.json):
-MEALIE_OPENAPI=path/to/openapi.json pytest tests/test_openapi_paths.py
-```
-
-Dependencies are declared in `pyproject.toml` and locked with hashes:
-
-```sh
-uv pip compile pyproject.toml --python-version 3.12 --generate-hashes --no-header -o requirements.txt
-uv pip compile requirements-dev.in --python-version 3.12 --generate-hashes --no-header -o requirements-dev.txt
-```
-
-### Adding a language
-
-Copy `mealie_bot/i18n/en.py`, translate messages, command names and unit
-spellings, and register it in `mealie_bot/i18n/__init__.py`. The tests check
-that the catalog is complete.
-
-### Adding a feature
-
-Create a package under `mealie_bot/features/` that exports a `Feature`, add it to
-`available_features()` and to `KNOWN_FEATURES` in `config.py`. It is then
-switched with `FEATURE_<NAME>`.
+* [Configuration](docs/configuration.md): all environment variables and `*_FILE` secrets
+* [Compatibility](docs/compatibility.md): Mealie, Python, image and Telegram versions
+* [Security](docs/security.md): what the bot can reach, how access and secrets are handled
+* [FAQ](docs/faq.md): ports, groups, which list is used, updating
+* [Development](docs/development.md): running the bot locally (bash and fish), releases
+* [Specification](docs/SPEC.md): the complete behaviour, kept in sync with the code
 
 ## Contributing
 
-* Conventional Commits; every change as a pull request with tests; squash merge to `main`.
-* CI must be green (ruff, pytest, gitleaks, Docker build).
-* No personal data in code, tests, examples, commits or pull requests.
-
-## Releases
-
-1. Bump `version` in `pyproject.toml` and `__version__` in `mealie_bot/__init__.py`
-   in a pull request and merge it.
-2. Tag the merge commit on `main` and push the tag:
-   `git tag v0.1.0 && git push origin v0.1.0`.
-3. The release workflow runs CI, then publishes
-   `ghcr.io/<owner>/mealie-telegram-bot:v0.1.0` (and `:v0.1`). The image digest
-   is shown in the workflow summary; deploy by tag and digest.
+See [CONTRIBUTING.md](CONTRIBUTING.md). In short: Conventional Commits, every
+change as a pull request with tests, squash merge to `main`, CI must be green,
+and no personal data anywhere in the repository. Security issues go through
+[SECURITY.md](SECURITY.md).
 
 ## License
 

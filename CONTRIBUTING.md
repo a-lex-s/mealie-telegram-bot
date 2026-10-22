@@ -91,7 +91,7 @@ The module is then switched on or off with `FEATURE_<NAME>`.
 
 ## Releases
 
-See the "Releases" section of the [README](README.md#releases). In short: bump
+See [docs/development.md](docs/development.md#releases). In short: bump
 the version in `pyproject.toml` and `mealie_bot/__init__.py`, move the
 "Unreleased" changelog entries under the new version, merge, then push the
 `vX.Y.Z` tag.

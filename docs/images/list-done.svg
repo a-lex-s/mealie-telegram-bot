@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="300" viewBox="0 0 360 300" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+<title>Ticked-off items can be put back or removed</title>
+<rect width="360" height="300" rx="20" fill="#f4f4f5"/>
+<rect width="360" height="56" fill="#2a7fcf"/>
+<circle cx="34" cy="28" r="16" fill="#fff" opacity="0.9"/><text x="34" y="33" font-size="16" text-anchor="middle">🛒</text>
+<text x="62" y="25" font-size="15" font-weight="600" fill="#fff">Mealie Bot</text>
+<text x="62" y="42" font-size="12" fill="#d8e8f7">bot</text>
+<rect x="16" y="72" width="320" height="82" rx="14" fill="#fff" stroke="#e5e5e5"/><text x="28" y="92" font-size="12" font-weight="600" fill="#2a7fcf">Mealie Bot</text>
+<text x="28" y="112" font-size="14" font-weight="600" fill="#111">✅ Groceries · 2 ticked off</text>
+<text x="28" y="132" font-size="14" fill="#111">Tap an item to put it back.</text>
+<rect x="16" y="160" width="320" height="34" rx="8" fill="#eaf3fb"/><text x="176" y="182" font-size="13" text-anchor="middle" fill="#2a7fcf">↩️ butter</text>
+<rect x="16" y="200" width="320" height="34" rx="8" fill="#eaf3fb"/><text x="176" y="222" font-size="13" text-anchor="middle" fill="#2a7fcf">↩️ bananas</text>
+<rect x="16" y="240" width="157" height="34" rx="8" fill="#eaf3fb"/><text x="94" y="262" font-size="13" text-anchor="middle" fill="#2a7fcf">⬅️ Open items</text>
+<rect x="179" y="240" width="157" height="34" rx="8" fill="#eaf3fb"/><text x="258" y="262" font-size="13" text-anchor="middle" fill="#2a7fcf">🧹 Remove ticked off (2)</text>
+</svg>
