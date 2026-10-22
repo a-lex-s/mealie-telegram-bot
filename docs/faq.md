@@ -34,8 +34,9 @@ Tap *Refresh* (or any button) or send `/list` again. There are no push
 notifications in version 1.
 
 **Where did my `/list` message go?**
-The bot deletes command messages after handling them so that only the list
-stays in the chat. Set `DELETE_COMMANDS=false` to keep them.
+The bot deletes `/list`, `/lists` and `/clear` after handling them so that only
+the list stays in the chat (`/start` and `/help` stay). Set
+`DELETE_COMMANDS=false` to keep them.
 
 **The times in the list are off.**
 Set the container's time zone with `TZ`, for example `TZ=Europe/Berlin`.

@@ -37,6 +37,7 @@ ruff check . && ruff format --check .
 mypy
 pytest
 pip-audit --disable-pip --require-hashes -r requirements.txt
+pip-audit --disable-pip --require-hashes -r requirements-dev.txt
 zizmor .github/workflows
 ```
 

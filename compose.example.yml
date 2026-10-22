@@ -36,9 +36,9 @@ services:
     security_opt:
       - no-new-privileges:true
 
-  # Local testing variant: Mealie runs on the host (for example in WSL) and is
-  # reachable at http://localhost:9000. Comment out the service above, uncomment
-  # this one and the "networks" block below is not needed.
+  # Local testing variant (3): Mealie runs on the host (for example in WSL) and
+  # is reachable at http://localhost:9000. Comment out the service above and
+  # uncomment this one; the "networks" block at the bottom is not needed then.
   # mealie-telegram-bot-local:
   #   build: .                      # or the same image as above
   #   restart: unless-stopped

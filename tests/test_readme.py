@@ -1,4 +1,4 @@
-"""Checks for README.md, the docs/ pages, compose.example.yml and the mockup images."""
+"""Checks for README.md, the docs/ pages, compose.example.yml, mockups and screenshots."""
 
 import re
 from pathlib import Path
@@ -63,11 +63,19 @@ def test_configuration_page_documents_every_setting() -> None:
         "MEALIE_URL",
         "BOT_LANGUAGE",
         "SHOPPING_LIST",
+        "DELETE_COMMANDS",
         "MEALIE_TIMEOUT",
+        "TZ",
         "LOG_LEVEL",
     ] + [f"FEATURE_{name.upper()}" for name in KNOWN_FEATURES]
     for name in names:
         assert f"`{name}`" in page, f"{name} is not documented in docs/configuration.md"
+
+
+# The views shown in the README. Each one is a real screenshot in docs/screenshots/
+# once it exists, otherwise the SVG mockup of the same name in docs/images/.
+VIEWS = ["list-collapsed", "list-expanded", "add-items"]
+MAX_SCREENSHOT_BYTES = 400_000
 
 
 @pytest.mark.parametrize("image", sorted((ROOT / "docs/images").glob("*.svg")))
@@ -76,7 +84,26 @@ def test_mockups_are_valid_svg_without_external_references(image: Path) -> None:
     doc = minidom.parseString(text)
     assert doc.documentElement.tagName == "svg"
     assert not re.search(r"<image|href=|url\(|<script", text), "mockups must be self-contained"
-    assert image.name in README, f"{image.name} is not used in the README"
+    assert image.stem in VIEWS, f"{image.name} is not one of the README views"
+
+
+@pytest.mark.parametrize("view", VIEWS)
+def test_readme_shows_screenshot_or_falls_back_to_mockup(view: str) -> None:
+    screenshot = ROOT / "docs/screenshots" / f"{view}.png"
+    mockup = ROOT / "docs/images" / f"{view}.svg"
+    if screenshot.exists():
+        assert f"docs/screenshots/{view}.png" in README, f"README does not use {screenshot.name}"
+        assert f"docs/images/{view}.svg" not in README, f"README still uses the mockup for {view}"
+    else:
+        assert mockup.exists(), f"neither a screenshot nor a mockup exists for {view}"
+        assert f"docs/images/{view}.svg" in README, f"README does not use {mockup.name}"
+
+
+@pytest.mark.parametrize("image", sorted((ROOT / "docs/screenshots").glob("*.png")))
+def test_screenshots_are_small_png_files(image: Path) -> None:
+    assert image.stem.removesuffix("-dark") in VIEWS, f"{image.name} is not one of the README views"
+    assert image.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n", f"{image.name} is not a PNG"
+    assert image.stat().st_size <= MAX_SCREENSHOT_BYTES, f"{image.name} is larger than 400 kB"
 
 
 def test_mockups_use_placeholder_names_only() -> None:

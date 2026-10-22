@@ -6,7 +6,7 @@
 | Python | 3.12 | Only 3.12 is supported (`requires-python = ">=3.12,<3.13"`). |
 | aiogram | 3.x | Exact version pinned in `requirements.txt`. |
 | httpx | 0.28.x | Exact version pinned in `requirements.txt`. |
-| Docker image | `linux/amd64` | Based on `python:3.12-slim`, pinned by digest. |
+| Docker image | `linux/amd64` | Based on `python:3.12-slim-trixie`, pinned by digest. |
 | Telegram | Bot API, private chats | Groups receive only commands because of Telegram's privacy mode. |
 
 To check the bot against your own Mealie version, download its OpenAPI document

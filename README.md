@@ -25,7 +25,9 @@ in Telegram. Recipes and meal plans may follow as separate, optional modules.
 |---|---|---|
 | ![/list shows the list with a progress bar, collapsed categories and the done items in a quote](docs/images/list-collapsed.svg) | ![A tapped category shows its items as buttons, short names sharing a row](docs/images/list-expanded.svg) | ![Alice sends "500 g flour, baking powder, 3 lemons"; the list follows with an "Added" quote and an Undo button](docs/images/add-items.svg) |
 
-Mockups of the bot's messages; names and items are placeholders. The chat stays
+Mockups of the bot's messages; names and items are placeholders. Real
+screenshots replace them as described in
+[docs/screenshots/README.md](docs/screenshots/README.md). The chat stays
 tidy: there is one live list message that the bot edits in place, taps answer
 with short toasts, and when the list moves down the old message turns into a
 compact history entry (`21:12 · Alice ➕ flour · 500 g, baking powder`).
@@ -41,13 +43,15 @@ Docker with Compose, and a Telegram account.
    should act as and create a long-lived token under *API tokens*. A dedicated
    Mealie user for the bot keeps things tidy.
 3. **Find your Telegram user IDs**: message [@userinfobot](https://t.me/userinfobot)
-   from every account that may use the bot.
+   from every account that may use the bot, or start the bot with a placeholder
+   ID and read the real one from the `WARNING` line it logs for unknown users.
 4. **Add the service**: copy [compose.example.yml](compose.example.yml), set
    the image tag (and digest) and `ALLOWED_USER_IDS`, and put the two tokens
    into `secrets/telegram_bot_token` and `secrets/mealie_api_token`. The file
-   has two variants: next to Mealie in the same Compose network
-   (`MEALIE_URL=http://mealie:9000`), or standalone on any host against a
-   Mealie reachable over HTTPS (`MEALIE_URL=https://mealie.example.com`).
+   has three variants: next to Mealie in the same Compose network
+   (`MEALIE_URL=http://mealie:9000`), standalone on any host against a Mealie
+   reachable over HTTPS (`MEALIE_URL=https://mealie.example.com`), and a
+   commented one for local testing against a Mealie on `localhost`.
 5. **Start it**: `docker compose up -d mealie-telegram-bot`. The log line
    `Connected to Mealie <version>` shows that the start-up check passed.
 6. **Try it**: open the chat with your bot, send `/start`, then

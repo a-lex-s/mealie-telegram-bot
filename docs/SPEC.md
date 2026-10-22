@@ -28,7 +28,7 @@ mealie_bot/
   mealie/client.py     shared async Mealie API client (httpx)
   telegram/            dispatcher wiring, access control, language middleware
   features/
-    shopping/          feature module: parser, service, rendering, handlers
+    shopping/          feature module: parser, service, rendering, chat state, handlers
     (recipes/, mealplan/ later)
 ```
 
@@ -53,7 +53,7 @@ bot at start-up with exit code 2 and a message that never contains secret values
 | `BOT_LANGUAGE` | no | per user | Force one language (`en`, `de`) for everybody |
 | `SHOPPING_LIST` | no | first list | Default shopping list, by name (case-insensitive) or ID |
 | `FEATURE_SHOPPING` | no | `true` | Enable the shopping list feature |
-| `DELETE_COMMANDS` | no | `true` | Delete the user's command messages (`/list` …) once handled, so only the list stays in the chat |
+| `DELETE_COMMANDS` | no | `true` | Delete the user's `/list`, `/lists` and `/clear` messages once handled, so only the list stays in the chat |
 | `MEALIE_TIMEOUT` | no | `10` | HTTP timeout for Mealie requests in seconds |
 | `TZ` | no | UTC | Time zone of the container; used for the "as of" time in list messages and history entries |
 | `LOG_LEVEL` | no | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR` |
@@ -96,9 +96,10 @@ The command menu, the bot description and the short description ("What can this
 bot do?") are published per language at start-up (`setMyCommands`,
 `setMyDescription`, `setMyShortDescription`).
 
-With `DELETE_COMMANDS=true` (default) the bot deletes the user's command message
-after it has been handled, so the chat holds only the list and the history.
-Plain text messages that add items are never deleted.
+With `DELETE_COMMANDS=true` (default) the bot deletes the user's `/list`,
+`/lists` and `/clear` messages after they have been handled, so the chat holds
+the list and the history instead of a trail of commands. `/start`, `/help` and
+plain text messages that add items are never deleted.
 
 ### 6.2 Active list
 

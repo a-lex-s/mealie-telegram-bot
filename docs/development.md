@@ -16,6 +16,7 @@ Put the tokens into `secrets/telegram_bot_token` and `secrets/mealie_api_token`
 on `localhost`. With bash or zsh:
 
 ```sh
+. .venv/bin/activate
 export TELEGRAM_BOT_TOKEN_FILE=./secrets/telegram_bot_token
 export MEALIE_API_TOKEN_FILE=./secrets/mealie_api_token
 export MEALIE_URL=http://localhost:9000
@@ -44,6 +45,13 @@ To check the Mealie client against your own instance, download
 ```sh
 MEALIE_OPENAPI=path/to/openapi.json pytest tests/test_openapi_paths.py
 ```
+
+## Screenshots
+
+The images in the README come from `docs/screenshots/`; how to take them with
+placeholder data only is described in
+[docs/screenshots/README.md](screenshots/README.md). Until a screenshot exists,
+the README shows the SVG mockup from `docs/images/`.
 
 ## Releases
 
