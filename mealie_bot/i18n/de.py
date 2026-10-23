@@ -47,6 +47,8 @@ MESSAGES: dict[str, str] = {
     "error.mealie": "Mealie ist gerade nicht erreichbar. Bitte später noch einmal versuchen.",
     "error.no_lists": "In Mealie gibt es noch keine Einkaufsliste. Bitte zuerst dort eine anlegen.",
     "error.not_understood": "Ich habe in der Nachricht keine Einträge gefunden.",
+    "error.too_many": "Das sind mehr als {max} Einträge in einer Nachricht. Bitte aufteilen.",
+    "error.too_long": "Ein Eintrag ist länger als {max} Zeichen. Bitte kürzen.",
     "shopping.list_header": "🛒 <b>{list}</b>",
     "shopping.list_counts": "{open} offen · {done} erledigt",
     "shopping.list_empty": "Nichts zu kaufen. 🎉",

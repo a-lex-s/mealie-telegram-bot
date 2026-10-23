@@ -252,6 +252,30 @@ async def test_unparseable_text(harness, mealie_mock):
     assert not session.sent(DeleteMessage)  # kept so the user can fix and resend it
 
 
+async def test_too_many_entries_are_rejected_before_mealie(harness, mealie_mock):
+    feed, session = harness
+    route = mealie_mock.post("/api/households/shopping/items/create-bulk")
+    await feed(message(", ".join(["milk"] * 51)))
+    assert not route.called
+    assert "more than 50" in session.last(SendMessage).text
+    assert not session.sent(DeleteMessage)  # kept so the user can split it
+
+
+async def test_too_long_entry_is_rejected(harness, mealie_mock):
+    feed, session = harness
+    await feed(message("x" * 201, language="de"))
+    assert "länger als 200" in session.last(SendMessage).text
+
+
+async def test_forged_callback_ids_never_reach_mealie(harness, mealie_mock):
+    feed, session = harness
+    get = mealie_mock.get(url__regex=r".*")
+    await feed(callback(ItemAction(action="check", item_id="../users/self", view=VIEW_OPEN).pack()))
+    await feed(callback(SelectList(list_id="x/../../api/users").pack()))
+    assert [type(c).__name__ for c in session.calls] == ["AnswerCallbackQuery"] * 2
+    assert not get.called
+
+
 async def test_stranger_is_ignored(harness, mealie_mock):
     feed, session = harness
     route = mealie_mock.post("/api/households/shopping/items/create-bulk")

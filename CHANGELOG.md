@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so strangers cannot flood the log.
 - A crash is logged through the redacting log handler (exit code 1) instead of
   an unfiltered traceback on stderr.
+- Input limits for item messages: at most 50 entries, 200 characters per
+  entry, quantities between 0 and 10 000; control and invisible characters are
+  stripped. Over the limit the bot replies instead of asking Mealie.
+- IDs from button data are validated before they are used in a Mealie request
+  path.
 
 ### Added
 

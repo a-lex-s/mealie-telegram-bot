@@ -136,7 +136,15 @@ Any text message that is not a command adds items to the active list.
   unit synonyms in the catalogs (all languages) or a name, plural, abbreviation
   or alias of a unit in Mealie. A unit glued to a number must also be known, so
   `7up` stays a name.
-* Without a quantity the item gets quantity 1 (Mealie's default).
+* Without a quantity the item gets quantity 1 (Mealie's default). A number
+  that is zero, negative or above 10 000 is not a quantity and stays part of
+  the name.
+* Input limits: control and invisible characters (zero-width, bidi marks) are
+  removed first. A message with more than 50 entries or an entry longer than
+  200 characters is rejected with a short reply and nothing is sent to Mealie;
+  the message stays so the user can split or shorten it.
+* IDs carried in button data (`item_id`, `list_id`) are only used when they
+  consist of letters, digits and hyphens; a forged ID is answered silently.
 
 Matching against Mealie (per entry):
 

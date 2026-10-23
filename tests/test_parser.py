@@ -1,7 +1,13 @@
 import pytest
 
 from mealie_bot.features.shopping.parser import (
+    MAX_ENTRIES,
+    MAX_ENTRY_LENGTH,
+    MAX_QUANTITY,
+    EntryTooLong,
     ParsedEntry,
+    TooManyEntries,
+    clean_text,
     parse_entry,
     parse_message,
     parse_quantity,
@@ -74,3 +80,31 @@ def test_parse_message_multiple():
 )
 def test_parse_quantity(text, value):
     assert parse_quantity(text) == value
+
+
+@pytest.mark.parametrize("text", ["0", "-1", "1e9", str(MAX_QUANTITY + 1), "0/5"])
+def test_parse_quantity_rejects_nonsense(text):
+    assert parse_quantity(text) is None
+
+
+def test_absurd_number_stays_part_of_the_name():
+    assert parse_entry("99999999 milk", UNITS) == ParsedEntry("99999999 milk")
+    assert parse_entry("0 milk", UNITS) == ParsedEntry("0 milk")
+
+
+def test_clean_text_strips_control_and_invisible_characters():
+    assert clean_text("mi\x00lk\u200b\u202e, e\x07ggs\nbread\t1") == "milk, eggs\nbread\t1"
+    assert parse_message("mi\u200blk\x00", UNITS) == [ParsedEntry("milk")]
+
+
+def test_too_many_entries():
+    with pytest.raises(TooManyEntries) as info:
+        parse_message(", ".join(["milk"] * (MAX_ENTRIES + 1)), UNITS)
+    assert info.value.limit == MAX_ENTRIES
+    assert len(parse_message(", ".join(["milk"] * MAX_ENTRIES), UNITS)) == MAX_ENTRIES
+
+
+def test_entry_too_long():
+    with pytest.raises(EntryTooLong):
+        parse_message("m" * (MAX_ENTRY_LENGTH + 1), UNITS)
+    assert parse_message("m" * MAX_ENTRY_LENGTH, UNITS) == [ParsedEntry("m" * MAX_ENTRY_LENGTH)]

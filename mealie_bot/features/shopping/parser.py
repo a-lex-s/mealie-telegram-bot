@@ -8,8 +8,44 @@ the service layer.
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Container
 from dataclasses import dataclass
+
+# Limits on what one message may contain. They protect Mealie (one food search
+# per entry) and Telegram (message and button sizes), not the user's patience.
+MAX_ENTRIES = 50
+MAX_ENTRY_LENGTH = 200
+MAX_QUANTITY = 10_000
+
+# Invisible characters that must not end up in Mealie or in rendered messages:
+# zero-width spaces/joiners, bidi controls, byte order mark.
+_INVISIBLE = re.compile("[\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]")
+
+
+class InputError(ValueError):
+    """The message cannot be turned into shopping list entries."""
+
+    def __init__(self, limit: int) -> None:
+        super().__init__(f"limit {limit} exceeded")
+        self.limit = limit
+
+
+class TooManyEntries(InputError):
+    pass
+
+
+class EntryTooLong(InputError):
+    pass
+
+
+def clean_text(text: str) -> str:
+    """Drop control and invisible characters; keep line breaks and tabs for splitting."""
+    text = _INVISIBLE.sub("", text)
+    return "".join(
+        ch for ch in text if ch in "\n\t" or unicodedata.category(ch) not in {"Cc", "Cs"}
+    )
+
 
 _FRACTIONS = {"½": 0.5, "¼": 0.25, "¾": 0.75, "⅓": 1 / 3, "⅔": 2 / 3}
 _NUMBER = r"(?:\d+(?:[.,]\d+)?|\d+/\d+|[½¼¾⅓⅔])"
@@ -28,18 +64,21 @@ class ParsedEntry:
 
 
 def parse_quantity(text: str) -> float | None:
+    """Parse a quantity token; ``None`` if it is not a sensible quantity (0 < q <= MAX_QUANTITY)."""
     if text in _FRACTIONS:
         return _FRACTIONS[text]
     if "/" in text:
         numerator, _, denominator = text.partition("/")
         try:
-            return int(numerator) / int(denominator)
+            value = int(numerator) / int(denominator)
         except (ValueError, ZeroDivisionError):
             return None
-    try:
-        return float(text.replace(",", "."))
-    except ValueError:
-        return None
+    else:
+        try:
+            value = float(text.replace(",", "."))
+        except ValueError:
+            return None
+    return value if 0 < value <= MAX_QUANTITY else None
 
 
 def split_entries(text: str) -> list[str]:
@@ -109,5 +148,11 @@ def parse_entry(text: str, known_units: Container[str]) -> ParsedEntry:
 
 
 def parse_message(text: str, known_units: Container[str]) -> list[ParsedEntry]:
-    entries = (parse_entry(part, known_units) for part in split_entries(text))
+    """Parse a whole message; raises ``InputError`` when it exceeds the limits."""
+    parts = split_entries(clean_text(text))
+    if len(parts) > MAX_ENTRIES:
+        raise TooManyEntries(MAX_ENTRIES)
+    if any(len(part) > MAX_ENTRY_LENGTH for part in parts):
+        raise EntryTooLong(MAX_ENTRY_LENGTH)
+    entries = (parse_entry(part, known_units) for part in parts)
     return [entry for entry in entries if entry.name]

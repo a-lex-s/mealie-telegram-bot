@@ -16,6 +16,7 @@ The chat is kept tidy around one *live* list message per chat:
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable, Mapping
 from contextlib import suppress
 from datetime import datetime
@@ -27,7 +28,11 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from mealie_bot.features import FeatureContext
-from mealie_bot.features.shopping.parser import parse_message
+from mealie_bot.features.shopping.parser import (
+    EntryTooLong,
+    TooManyEntries,
+    parse_message,
+)
 from mealie_bot.features.shopping.render import (
     VIEW_CLEAR,
     VIEW_DONE,
@@ -55,6 +60,13 @@ log = logging.getLogger(__name__)
 
 Clock = Callable[[], datetime]
 _TELEGRAM_ERRORS = (TelegramBadRequest, TelegramForbiddenError)
+# Mealie IDs are UUIDs. Button data can be forged by a client, so an ID is only
+# put into a request path if it looks like one (no "/", "?", "." or "..").
+_SAFE_ID = re.compile(r"^[A-Za-z0-9-]{1,64}$")
+
+
+def valid_id(value: str) -> bool:
+    return bool(_SAFE_ID.match(value))
 
 
 def _local_now() -> datetime:
@@ -263,7 +275,14 @@ def build_router(context: FeatureContext) -> Router:
         ui.note_message(message)
         try:
             units = await service.units()
-            entries = parse_message(message.text or "", units.known_tokens)
+            try:
+                entries = parse_message(message.text or "", units.known_tokens)
+            except TooManyEntries as exc:
+                await message.answer(tr("error.too_many", max=exc.limit))
+                return
+            except EntryTooLong as exc:
+                await message.answer(tr("error.too_long", max=exc.limit))
+                return
             if not entries:
                 await message.answer(tr("error.not_understood"))
                 return
@@ -300,7 +319,7 @@ def build_router(context: FeatureContext) -> Router:
     @router.callback_query(ItemAction.filter())
     async def on_item(query: CallbackQuery, callback_data: ItemAction, tr: Translator) -> None:
         message = query.message
-        if not isinstance(message, Message):
+        if not isinstance(message, Message) or not valid_id(callback_data.item_id):
             await query.answer()
             return
         checked = callback_data.action == "check"
@@ -370,10 +389,10 @@ def build_router(context: FeatureContext) -> Router:
     @router.callback_query(SelectList.filter())
     async def on_select(query: CallbackQuery, callback_data: SelectList, tr: Translator) -> None:
         message = query.message
-        service.select_list(query.from_user.id, callback_data.list_id)
-        if not isinstance(message, Message):
+        if not isinstance(message, Message) or not valid_id(callback_data.list_id):
             await query.answer()
             return
+        service.select_list(query.from_user.id, callback_data.list_id)
         try:
             await query.answer()
             await ui.show_in(message, query.from_user.id, tr, ListState())
