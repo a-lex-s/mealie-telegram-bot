@@ -7,62 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Security
+Nothing yet.
 
-- Pin `pydantic` below 2.14 as aiogram requires; the two lock files agree
-  again and `pip check` runs in CI and in the image build.
-- The image no longer contains pip, setuptools or wheel.
-- Narrower gitleaks allowlist: lines mentioning `example.com` are no longer
-  skipped wholesale.
-- Access control runs on the dispatcher's update observer and therefore covers
-  every update type, not only messages and button taps.
-- Unknown user IDs are logged once per process instead of once per message,
-  so strangers cannot flood the log.
-- A crash is logged through the redacting log handler (exit code 1) instead of
-  an unfiltered traceback on stderr.
-- Input limits for item messages: at most 50 entries, 200 characters per
-  entry, quantities between 0 and 10 000; control and invisible characters are
-  stripped. Over the limit the bot replies instead of asking Mealie.
-- IDs from button data are validated before they are used in a Mealie request
-  path.
+## [0.1.0] - 2026-10-23
 
-### Fixed
-
-- `pip install -e .` no longer fails with "Multiple top-level packages" when a
-  `secrets/` directory exists in the checkout; packaging is limited to
-  `mealie_bot`.
-- `/list`, `/lists` and `/clear` always send the list as a new message instead
-  of editing the old one. After the user cleared the chat history, the old
-  message still existed on the bot's side, the edit succeeded unseen and no
-  list appeared until the bot was restarted. A live message that is gone on
-  both sides is forgotten when a sync from the other chat hits it.
-- *Undo* keeps its data when Mealie is unreachable, so the tap can be repeated.
-- Old list messages that Telegram no longer lets the bot delete (after 48
-  hours) are rewritten into a stub without buttons instead of lingering.
-- Toasts are cut to Telegram's 200 characters.
-- A hint for unknown commands and non-text messages (photos, voice messages).
-
-### Changed
-
-- `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` and `SECURITY.md` live in `.github/`,
-  where GitHub still picks them up, so the repository root is shorter.
-
-- The README shows real screenshots instead of the SVG mockups.
-- The progress bar sits on its own line above the status line
-  `n open · m done · HH:MM` instead of in front of it.
-- A change made in one chat re-renders the live list messages of the other
-  chats on the same list, and is recorded in their histories too; in a private
-  chat the owner's own name is left out of the history.
-- Categories follow the order set for the list in Mealie instead of being
-  alphabetical; the list chosen with `/lists` belongs to the chat, not the user.
-- The 15-minute history window counts from the latest change of an entry.
-- Documentation covers the group chat set-up (privacy mode off, bot as admin).
-- Foods are loaded once and cached for 10 minutes (reloaded on a miss after a
-  minute) instead of searching Mealie per entry, so exact matches are no
-  longer limited to the first 20 search results.
-- An unknown unit no longer prevents the food match: `2 Netz Tomaten` becomes
-  the food *Tomaten* with the note `Netz` and keeps its category.
-- The numbering of pasted lists (`1. milk`, `2) eggs`) is ignored.
+First release: the shopping list helper.
 
 ### Added
 
@@ -128,6 +77,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` and `SECURITY.md` live in `.github/`,
+  where GitHub still picks them up, so the repository root is shorter.
+
+- The README shows real screenshots instead of the SVG mockups.
+- The progress bar sits on its own line above the status line
+  `n open · m done · HH:MM` instead of in front of it.
+- A change made in one chat re-renders the live list messages of the other
+  chats on the same list, and is recorded in their histories too; in a private
+  chat the owner's own name is left out of the history.
+- Categories follow the order set for the list in Mealie instead of being
+  alphabetical; the list chosen with `/lists` belongs to the chat, not the user.
+- The 15-minute history window counts from the latest change of an entry.
+- Documentation covers the group chat set-up (privacy mode off, bot as admin).
+- Foods are loaded once and cached for 10 minutes (reloaded on a miss after a
+  minute) instead of searching Mealie per entry, so exact matches are no
+  longer limited to the first 20 search results.
+- An unknown unit no longer prevents the food match: `2 Netz Tomaten` becomes
+  the food *Tomaten* with the note `Netz` and keeps its category.
+- The numbering of pasted lists (`1. milk`, `2) eggs`) is ignored.
+
 - Release workflow: the tag is checked against the package version and `main`
   before CI runs, the GitHub release is created or updated so that a re-run
   succeeds, no `latest` tag is pushed, and every CI job has a timeout.
@@ -138,4 +107,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so the versions match CI; a test keeps both gitleaks pins in step; release
   notes are grouped by label and skip Dependabot.
 
-[Unreleased]: https://github.com/a-lex-s/mealie-telegram-bot/commits/main
+### Fixed
+
+- `pip install -e .` no longer fails with "Multiple top-level packages" when a
+  `secrets/` directory exists in the checkout; packaging is limited to
+  `mealie_bot`.
+- `/list`, `/lists` and `/clear` always send the list as a new message instead
+  of editing the old one. After the user cleared the chat history, the old
+  message still existed on the bot's side, the edit succeeded unseen and no
+  list appeared until the bot was restarted. A live message that is gone on
+  both sides is forgotten when a sync from the other chat hits it.
+- *Undo* keeps its data when Mealie is unreachable, so the tap can be repeated.
+- Old list messages that Telegram no longer lets the bot delete (after 48
+  hours) are rewritten into a stub without buttons instead of lingering.
+- Toasts are cut to Telegram's 200 characters.
+- A hint for unknown commands and non-text messages (photos, voice messages).
+
+### Security
+
+- Pin `pydantic` below 2.14 as aiogram requires; the two lock files agree
+  again and `pip check` runs in CI and in the image build.
+- The image no longer contains pip, setuptools or wheel.
+- Narrower gitleaks allowlist: lines mentioning `example.com` are no longer
+  skipped wholesale.
+- Access control runs on the dispatcher's update observer and therefore covers
+  every update type, not only messages and button taps.
+- Unknown user IDs are logged once per process instead of once per message,
+  so strangers cannot flood the log.
+- A crash is logged through the redacting log handler (exit code 1) instead of
+  an unfiltered traceback on stderr.
+- Input limits for item messages: at most 50 entries, 200 characters per
+  entry, quantities between 0 and 10 000; control and invisible characters are
+  stripped. Over the limit the bot replies instead of asking Mealie.
+- IDs from button data are validated before they are used in a Mealie request
+  path.
+
+[Unreleased]: https://github.com/a-lex-s/mealie-telegram-bot/compare/v0.1.0...main
+[0.1.0]: https://github.com/a-lex-s/mealie-telegram-bot/releases/tag/v0.1.0
