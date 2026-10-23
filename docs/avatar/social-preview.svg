@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640">
+  <rect width="1280" height="640" fill="#15827a"/>
+  <!-- avatar, scaled from the 640x640 source and centred vertically -->
+  <g transform="translate(60 100) scale(0.6875)">
+    <!-- leafy green behind bag -->
+    <path d="M430 250 Q450 150 530 125 Q535 215 465 262 Z" fill="#6cc24a"/>
+    <path d="M425 255 Q395 165 440 100 Q490 165 460 258 Z" fill="#4caf50"/>
+    <!-- baguette -->
+    <path d="M235 255 L305 115" stroke="#e9b25b" stroke-width="54" stroke-linecap="round"/>
+    <g stroke="#c98a2c" stroke-width="8" stroke-linecap="round">
+      <line x1="252" y1="195" x2="282" y2="208"/>
+      <line x1="268" y1="163" x2="298" y2="176"/>
+    </g>
+    <!-- carrot -->
+    <path d="M318 262 Q320 190 362 150 Q404 190 406 262 Z" fill="#f4853a"/>
+    <path d="M340 230 Q362 222 384 230" fill="none" stroke="#d86f28" stroke-width="7" stroke-linecap="round"/>
+    <path d="M362 152 Q335 110 300 105 Q340 120 362 152 Q380 105 415 98 Q385 118 362 152 Q362 110 362 85 Q368 115 362 152 Z" fill="#4caf50"/>
+    <!-- bag -->
+    <path d="M150 250 H490 L470 520 Q467 548 438 548 H202 Q173 548 170 520 Z" fill="#fff6e8"/>
+    <rect x="140" y="236" width="360" height="40" rx="12" fill="#ffffff"/>
+    <!-- handles cutouts -->
+    <path d="M240 300 Q240 255 285 255 H355 Q400 255 400 300" fill="none" stroke="#0d5a52" stroke-opacity="0.25" stroke-width="18" stroke-linecap="round"/>
+    <!-- fold crease -->
+    <line x1="190" y1="300" x2="210" y2="548" stroke="#0d5a52" stroke-opacity="0.08" stroke-width="10"/>
+    <!-- check badge -->
+    <circle cx="320" cy="430" r="78" fill="#1e9c8c"/>
+    <path d="M283 432 L310 459 L362 400" fill="none" stroke="#fff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <!-- text -->
+  <g font-family="Inter, 'DejaVu Sans', Arial, sans-serif" fill="#ffffff">
+    <text x="540" y="232" font-size="64" font-weight="700" letter-spacing="-1">mealie-telegram-bot</text>
+    <text x="540" y="296" font-size="28" font-weight="500" fill="#d7f0ec">Telegram front end for self-hosted Mealie</text>
+    <g font-size="27" fill="#eaf7f5">
+      <text x="540" y="372">Shared shopping lists for your household</text>
+      <text x="540" y="416">Add items by message, tick them off with a tap</text>
+      <text x="540" y="460">English and German · Docker image · No telemetry</text>
+    </g>
+  </g>
+  <!-- bottom-left pill as a hint for the version 1 scope -->
+  <rect x="540" y="508" width="282" height="46" rx="23" fill="#1e9c8c"/>
+  <text x="681" y="539" font-family="Inter, 'DejaVu Sans', Arial, sans-serif" font-size="22" font-weight="600" fill="#ffffff" text-anchor="middle">Python · aiogram · MIT</text>
+</svg>

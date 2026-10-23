@@ -63,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Social preview image for the GitHub repository in `docs/avatar/`.
 - Profile picture for the bot (`docs/avatar/bot-avatar.svg`, PNG export for
   BotFather's `/setuserpic`).
 - Shopping list helper: add items by message, list and tick off items with
