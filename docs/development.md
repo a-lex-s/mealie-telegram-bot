@@ -52,7 +52,11 @@ The images in the README come from `docs/screenshots/`; how to take them with
 placeholder data only is described in
 [docs/screenshots/README.md](screenshots/README.md). The bot's profile picture
 lives in `docs/avatar/`: `bot-avatar.svg` is the source, `bot-avatar.png`
-(640×640) is what you upload in BotFather with `/setuserpic`.
+(640×640) is what you upload in BotFather with `/setuserpic`. The GitHub
+social preview (`social-preview.svg`, rendered to `social-preview.png` at
+1280×640) reuses the same drawing; upload the PNG under *Settings → General →
+Social preview*. Both PNGs are rendered with a headless Chromium screenshot of
+the SVG, so they need no extra tooling.
 
 ## Releases
 
