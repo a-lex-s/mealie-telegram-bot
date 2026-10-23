@@ -2,13 +2,13 @@
 
 Setting up the environment, running the checks, adding a language or a feature
 module and the pull request rules are described in
-[CONTRIBUTING.md](../CONTRIBUTING.md). This page covers running the bot itself
+[CONTRIBUTING.md](../.github/CONTRIBUTING.md). This page covers running the bot itself
 on your machine and cutting a release.
 
 ## Running locally
 
 Requires Python 3.12 and a virtual environment with the dependencies installed
-(see [CONTRIBUTING.md](../CONTRIBUTING.md#development-setup)). The same commands
+(see [CONTRIBUTING.md](../.github/CONTRIBUTING.md#development-setup)). The same commands
 work under WSL.
 
 Put the tokens into `secrets/telegram_bot_token` and `secrets/mealie_api_token`

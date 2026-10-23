@@ -64,14 +64,14 @@ MEALIE_OPENAPI=path/to/openapi.json pytest tests/test_openapi_paths.py
 * Branch from `main` and open a pull request; direct pushes to `main` are not
   used.
 * Every change comes with tests. Behaviour changes also update
-  [docs/SPEC.md](docs/SPEC.md), which is the source of truth for how the bot
+  [docs/SPEC.md](../docs/SPEC.md), which is the source of truth for how the bot
   behaves.
 * User-facing text lives in the string catalog under `mealie_bot/i18n/`.
   Add every new message to both `en.py` and `de.py`; the tests check that the
   catalogs are complete. Command names and unit synonyms belong there too.
 * Before changing a Mealie API call, check the path and payload against the
   OpenAPI document of the targeted Mealie version (currently 3.29.0).
-* Add a line to the "Unreleased" section of [CHANGELOG.md](CHANGELOG.md) for
+* Add a line to the "Unreleased" section of [CHANGELOG.md](../CHANGELOG.md) for
   anything a user would notice.
 * Pin versions. Dependencies are declared in `pyproject.toml` and locked with
   hashes:
@@ -116,7 +116,7 @@ greeting and the help intro).
 
 ## Releases
 
-See [docs/development.md](docs/development.md#releases). In short: bump
+See [docs/development.md](../docs/development.md#releases). In short: bump
 the version in `pyproject.toml` and `mealie_bot/__init__.py`, move the
 "Unreleased" changelog entries under the new version, merge, then push the
 `vX.Y.Z` tag.

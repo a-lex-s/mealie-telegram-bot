@@ -82,8 +82,8 @@ then shows what was added, with an *Undo* button.
 
 ## Contributing
 
-Contributions are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md). Please
-report security issues privately as described in [SECURITY.md](SECURITY.md).
+Contributions are welcome, see [CONTRIBUTING.md](.github/CONTRIBUTING.md). Please
+report security issues privately as described in [SECURITY.md](.github/SECURITY.md).
 
 ## License
 

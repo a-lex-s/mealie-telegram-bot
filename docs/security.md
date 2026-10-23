@@ -44,5 +44,5 @@ commit, or when a host that held it was compromised.
 4. If the token was committed, rewriting history is not enough: assume it was
    copied and keep the new tokens.
 
-Please report vulnerabilities privately as described in [SECURITY.md](../SECURITY.md),
+Please report vulnerabilities privately as described in [SECURITY.md](../.github/SECURITY.md),
 which also lists the supported versions.

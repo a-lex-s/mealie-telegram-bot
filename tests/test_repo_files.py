@@ -8,9 +8,9 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 
 COMMUNITY_FILES = [
-    "SECURITY.md",
-    "CONTRIBUTING.md",
-    "CODE_OF_CONDUCT.md",
+    ".github/SECURITY.md",
+    ".github/CONTRIBUTING.md",
+    ".github/CODE_OF_CONDUCT.md",
     "CHANGELOG.md",
     ".github/CODEOWNERS",
     ".github/PULL_REQUEST_TEMPLATE.md",
@@ -49,11 +49,13 @@ PROJECT_CONTACT = "a-lex-s-393168336@proton.me"
 
 
 def test_security_policy_uses_private_reporting() -> None:
-    text = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
+    text = (ROOT / ".github/SECURITY.md").read_text(encoding="utf-8")
     assert "/security/advisories/new" in text
 
 
-@pytest.mark.parametrize("name", ["SECURITY.md", "CODE_OF_CONDUCT.md", "CONTRIBUTING.md"])
+@pytest.mark.parametrize(
+    "name", [".github/SECURITY.md", ".github/CODE_OF_CONDUCT.md", ".github/CONTRIBUTING.md"]
+)
 def test_only_the_project_contact_address_is_used(name: str) -> None:
     text = (ROOT / name).read_text(encoding="utf-8")
     emails = set(re.findall(r"[\w.+-]+@[\w-]+\.[\w.-]+", text))

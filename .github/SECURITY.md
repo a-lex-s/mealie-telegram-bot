@@ -34,7 +34,7 @@ inbound port. It talks only to the Telegram Bot API and to `MEALIE_URL`.
   gitleaks in CI.
 
 How to rotate the tokens after a leak is described in
-[docs/security.md](docs/security.md).
+[docs/security.md](../docs/security.md).
 
 Reports about the Mealie server itself belong to the
 [Mealie project](https://github.com/mealie-recipes/mealie/security).

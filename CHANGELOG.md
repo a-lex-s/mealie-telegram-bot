@@ -44,6 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` and `SECURITY.md` live in `.github/`,
+  where GitHub still picks them up, so the repository root is shorter.
+
 - The README shows real screenshots instead of the SVG mockups.
 - The progress bar sits on its own line above the status line
   `n open · m done · HH:MM` instead of in front of it.
