@@ -1,8 +1,8 @@
 # Screenshots
 
-The README shows three views of the bot. Put a real screenshot of each one in
-this directory; until it exists, the README uses the SVG mockup of the same
-name from `docs/images/`.
+The README shows three views of the bot. This directory holds one screenshot
+of each; to replace one, take it again as described below and keep the file
+name.
 
 | File | What it shows | How to get there |
 |---|---|---|
@@ -37,22 +37,20 @@ Nothing else: no real products you buy, no other lists in the picture.
    python -m mealie_bot
    ```
 
-2. Use Telegram Desktop with the default light theme at 100 % zoom. Make the
-   window narrow so the chat column is about 500 px wide; the buttons then
+2. Use a Telegram client with the default light theme at phone width (about
+   370 px or more); on Telegram Desktop make the window narrow so the buttons
    wrap like on a phone.
 3. Send `/start` once, then follow the table above in order. Before the third
    screenshot the three foods must not be on the list yet (tap *Undo* if you
    retake it).
-4. Capture only the message bubbles (`Win`+`Shift`+`S` on Windows): no chat
-   header with the bot's name, no history entry (it carries your Telegram
-   first name), no system bar. Your own messages show no name in a private
-   chat, so they are fine.
-5. Save as PNG, about 600 to 900 px wide, at most 400 kB each (run the file
-   through `oxipng` or `pngquant` if it is bigger). `pytest tests/test_readme.py`
-   checks name, format and size.
-6. Replace `docs/images/<name>.svg` with `docs/screenshots/<name>.png` in the
-   README table and delete the mockup; the test fails if the README still
-   points at a mockup whose screenshot exists.
+4. Capture the chat area (`Win`+`Shift`+`S` on Windows): no history entry
+   (it carries your Telegram first name), no system bar. The chat header is
+   fine as long as the bot has a generic name such as "Mealie Bot". Your own
+   messages show no name in a private chat.
+5. Round the corners slightly (radius about 18 px) with a transparent
+   outside, save as PNG, at most 400 kB each (run the file through `oxipng`
+   or `pngquant` if it is bigger). `pytest tests/test_readme.py` checks name,
+   format and size.
 
 Check the pictures before committing: no real names, user names, IDs,
 hostnames or list names other than *Groceries*.

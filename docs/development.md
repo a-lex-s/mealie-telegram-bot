@@ -50,8 +50,7 @@ MEALIE_OPENAPI=path/to/openapi.json pytest tests/test_openapi_paths.py
 
 The images in the README come from `docs/screenshots/`; how to take them with
 placeholder data only is described in
-[docs/screenshots/README.md](screenshots/README.md). Until a screenshot exists,
-the README shows the SVG mockup from `docs/images/`. The bot's profile picture
+[docs/screenshots/README.md](screenshots/README.md). The bot's profile picture
 lives in `docs/avatar/`: `bot-avatar.svg` is the source, `bot-avatar.png`
 (640×640) is what you upload in BotFather with `/setuserpic`.
 

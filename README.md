@@ -23,12 +23,11 @@ in Telegram. Recipes and meal plans may follow as separate, optional modules.
 
 ## How it looks
 
-| The list | A category opened | Alice adds items |
+| The list | A category opened | Items added |
 |---|---|---|
-| ![/list shows the list with a progress bar, collapsed categories and the done items in a quote](docs/images/list-collapsed.svg) | ![A tapped category shows its items as buttons, short names sharing a row](docs/images/list-expanded.svg) | ![Alice sends "500 g flour, baking powder, 3 lemons"; the list follows with an "Added" quote and an Undo button](docs/images/add-items.svg) |
+| ![/list shows the list with a progress bar, collapsed categories and the done items in a quote](docs/screenshots/list-collapsed.png) | ![A tapped category shows its items as buttons, short names sharing a row](docs/screenshots/list-expanded.png) | ![After "500 g flour, baking powder, 3 lemons" the list shows an "Added" quote, the new categories opened and an Undo button](docs/screenshots/add-items.png) |
 
-Mockups of the bot's messages; names and items are placeholders. Real
-screenshots replace them as described in
+Screenshots with demo data; how they are made is described in
 [docs/screenshots/README.md](docs/screenshots/README.md). The chat stays
 tidy: there is one live list message that taps update in place, taps answer
 with short toasts, and when the list moves down (`/list`, new items) the old
