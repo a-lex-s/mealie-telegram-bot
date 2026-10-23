@@ -1,4 +1,6 @@
-<img src="docs/avatar/bot-avatar.png" alt="" width="96" align="right">
+<div align="center">
+
+<img src="docs/avatar/bot-avatar.png" alt="" width="112">
 
 # mealie-telegram-bot
 
@@ -8,6 +10,8 @@
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue)](pyproject.toml)
 [![Mealie 3.29.0](https://img.shields.io/badge/Mealie-3.29.0-green)](docs/compatibility.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
+
+</div>
 
 A shared shopping list for your household in Telegram, backed by a
 self-hosted [Mealie](https://mealie.io) instance. Send what you need, tick it
