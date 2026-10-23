@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The image no longer contains pip, setuptools or wheel.
 - Narrower gitleaks allowlist: lines mentioning `example.com` are no longer
   skipped wholesale.
+- Access control runs on the dispatcher's update observer and therefore covers
+  every update type, not only messages and button taps.
+- Unknown user IDs are logged once per process instead of once per message,
+  so strangers cannot flood the log.
+- A crash is logged through the redacting log handler (exit code 1) instead of
+  an unfiltered traceback on stderr.
 
 ### Added
 

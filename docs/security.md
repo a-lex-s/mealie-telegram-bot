@@ -8,7 +8,8 @@ inbound port. In short:
   not in the same private network, use an `https://` URL; certificates are
   verified and the API token is sent with every request.
 * **Access**: only Telegram user IDs in `ALLOWED_USER_IDS` are served; every
-  other update is dropped and the user ID is logged so an operator can add it.
+  other update is dropped without a reply. Each unknown user ID is logged once
+  per process so an operator can add it; strangers cannot flood the log.
 * **Secrets**: tokens come from environment variables or `*_FILE` secrets. They
   are hidden in `repr`, redacted by the log handler and never part of error
   messages. gitleaks runs as a pre-commit hook and in CI on the full history.

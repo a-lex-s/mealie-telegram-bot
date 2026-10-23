@@ -65,9 +65,11 @@ Mealie as done by that user. Its household determines which lists are visible.
 
 ## 4. Access control
 
-* Only updates from users in `ALLOWED_USER_IDS` are processed. Everything else
-  is dropped without a reply; the user ID is logged at WARNING level so an
-  operator can add it.
+* Only updates from users in `ALLOWED_USER_IDS` are processed. The check runs
+  on the dispatcher's update observer, so it covers every update type, not only
+  messages and button taps. Everything else is dropped without a reply and
+  without a Telegram API call; the user ID is logged once per process at
+  WARNING level so an operator can add it, and a stranger cannot flood the log.
 * The bot is meant for private chats. In groups, Telegram's privacy mode only
   delivers commands, so adding items by plain text does not work there.
 
@@ -274,7 +276,8 @@ OpenAPI file when `MEALIE_OPENAPI` points to one.
 
 * No secrets in the repository; gitleaks runs as a pre-commit hook and in CI.
 * Tokens are never logged: settings hide them in `repr`, the log handler redacts
-  them, HTTP errors are reported without request headers.
+  them, HTTP errors are reported without request headers. A crash is logged
+  through the same handler (exit code 1) instead of an unfiltered traceback.
 * Container runs as an unprivileged user, works with a read-only root file
   system, and needs no capabilities and no inbound port.
 * The repository is public: no personal data (domains, names, Telegram IDs,

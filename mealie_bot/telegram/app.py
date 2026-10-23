@@ -50,8 +50,10 @@ def build_core_router(features: list[Feature]) -> Router:
 
 def build_dispatcher(settings: Settings, mealie: MealieClient) -> Dispatcher:
     dispatcher = Dispatcher()
+    # Access control on the update observer covers every update type, not only the
+    # ones that currently have handlers.
+    dispatcher.update.outer_middleware(AccessMiddleware(settings.allowed_user_ids))
     for observer in (dispatcher.message, dispatcher.callback_query):
-        observer.outer_middleware(AccessMiddleware(settings.allowed_user_ids))
         observer.middleware(I18nMiddleware(settings.bot_language))
 
     features = enabled_features(settings)

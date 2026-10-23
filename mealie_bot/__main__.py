@@ -46,7 +46,15 @@ def main() -> int:
         return 2
     setup_logging(settings.log_level, settings.secrets)
     log.info("Starting mealie-telegram-bot %s", __version__)
-    asyncio.run(run(settings))
+    try:
+        asyncio.run(run(settings))
+    except KeyboardInterrupt:
+        return 0
+    except Exception:
+        # Through the logger, so the redacting filter sees the traceback; an
+        # uncaught exception would be printed to stderr unfiltered.
+        log.exception("Bot stopped with an error")
+        return 1
     return 0
 
 

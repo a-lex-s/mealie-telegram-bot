@@ -260,6 +260,24 @@ async def test_stranger_is_ignored(harness, mealie_mock):
     assert session.calls == []
 
 
+async def test_stranger_is_ignored_on_every_update_type(harness, mealie_mock):
+    """Access control sits on the update observer, so unhandled update types are covered too."""
+    feed, session = harness
+    edited = Update(
+        update_id=3,
+        edited_message=Message(
+            message_id=7,
+            date=datetime.now(UTC),
+            chat=Chat(id=STRANGER, type="private"),
+            from_user=User(id=STRANGER, is_bot=False, first_name="Mallory"),
+            text="milk",
+        ),
+    )
+    await feed(edited)
+    await feed(callback(ListAction(action="show").pack(), user_id=STRANGER))
+    assert session.calls == []
+
+
 # --- showing the list -------------------------------------------------------
 
 

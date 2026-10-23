@@ -1,3 +1,4 @@
+import logging
 from types import SimpleNamespace
 
 from aiogram.types import BotCommand
@@ -5,7 +6,11 @@ from aiogram.types import BotCommand
 from mealie_bot.config import Settings
 from mealie_bot.mealie import MealieClient
 from mealie_bot.telegram.app import build_dispatcher, enabled_features, menu_commands
-from mealie_bot.telegram.middleware import AccessMiddleware, I18nMiddleware
+from mealie_bot.telegram.middleware import (
+    MAX_REPORTED_STRANGERS,
+    AccessMiddleware,
+    I18nMiddleware,
+)
 from tests.conftest import BASE_URL
 
 
@@ -28,6 +33,25 @@ async def test_access_allows_listed_user():
 async def test_access_drops_others():
     assert (await _call(AccessMiddleware(frozenset({1})), SimpleNamespace(id=2)))[0] is None
     assert (await _call(AccessMiddleware(frozenset({1})), None))[0] is None
+
+
+async def test_access_logs_each_stranger_once(caplog):
+    middleware = AccessMiddleware(frozenset({1}))
+    with caplog.at_level(logging.WARNING, logger="mealie_bot.telegram.middleware"):
+        for user_id in (2, 2, 2, 3, 2):
+            await _call(middleware, SimpleNamespace(id=user_id))
+    reported = [r.getMessage() for r in caplog.records]
+    assert reported == [
+        "Ignoring updates from unauthorized user id 2",
+        "Ignoring updates from unauthorized user id 3",
+    ]
+
+
+async def test_access_reported_set_is_bounded():
+    middleware = AccessMiddleware(frozenset({1}))
+    for user_id in range(2, MAX_REPORTED_STRANGERS + 10):
+        await _call(middleware, SimpleNamespace(id=user_id))
+    assert len(middleware._reported) <= MAX_REPORTED_STRANGERS
 
 
 async def test_i18n_uses_language_code_and_override():
