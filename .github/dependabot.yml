@@ -12,6 +12,14 @@ updates:
         patterns:
           - "pydantic"
           - "pydantic-core"
+      # Development tools only live in requirements-dev.txt; one PR per week.
+      dev-tools:
+        patterns:
+          - "ruff"
+          - "mypy"
+          - "pytest*"
+          - "pip-audit"
+          - "zizmor"
   - package-ecosystem: docker
     directory: /
     schedule:
@@ -24,3 +32,8 @@ updates:
       interval: weekly
     commit-message:
       prefix: "ci(deps)"
+    groups:
+      # One PR for all action bumps instead of one CI run per action.
+      actions:
+        patterns:
+          - "*"

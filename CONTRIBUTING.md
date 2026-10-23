@@ -30,6 +30,13 @@ pip install --require-hashes -r requirements-dev.txt
 pip install pre-commit && pre-commit install
 ```
 
+The ruff and zizmor hooks run the versions from `requirements-dev.txt` inside
+the virtual environment, so pre-commit and CI always agree. gitleaks is the
+only hook with its own pin; it must match `GITLEAKS_VERSION` in
+`.github/workflows/ci.yml` (a test checks this). Dependabot keeps the Python
+tools, the base image and the actions current; bump gitleaks by hand in both
+places.
+
 Run the checks that CI runs:
 
 ```sh

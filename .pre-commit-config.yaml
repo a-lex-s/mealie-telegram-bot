@@ -1,15 +1,26 @@
-# Install with: pre-commit install
+# Install with: pre-commit install (inside the virtual environment, so that the
+# local hooks below use the ruff and zizmor versions from requirements-dev.txt).
 repos:
   - repo: https://github.com/gitleaks/gitleaks
+    # Keep in step with GITLEAKS_VERSION in .github/workflows/ci.yml
+    # (tests/test_tool_pins.py checks this).
     rev: v8.30.1
     hooks:
       - id: gitleaks
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.2
+  - repo: local
     hooks:
       - id: ruff-check
+        name: ruff check
+        entry: ruff check --force-exclude
+        language: system
+        types_or: [python, pyi]
       - id: ruff-format
-  - repo: https://github.com/zizmorcore/zizmor-pre-commit
-    rev: v1.31.1
-    hooks:
+        name: ruff format
+        entry: ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
       - id: zizmor
+        name: zizmor
+        entry: zizmor --min-severity low
+        language: system
+        files: ^\.github/workflows/.*\.ya?ml$

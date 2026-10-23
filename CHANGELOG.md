@@ -67,5 +67,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   succeeds, no `latest` tag is pushed, and every CI job has a timeout.
 - Docs and Compose example explain that secret files must be readable by
   UID 10001 and why the image has no healthcheck.
+- Dependabot groups action updates and development tools into one pull
+  request each; pre-commit runs ruff and zizmor from the virtual environment
+  so the versions match CI; a test keeps both gitleaks pins in step; release
+  notes are grouped by label and skip Dependabot.
 
 [Unreleased]: https://github.com/a-lex-s/mealie-telegram-bot/commits/main
