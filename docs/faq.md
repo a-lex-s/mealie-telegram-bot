@@ -15,11 +15,21 @@ every request, so use HTTPS for anything outside a private network.
 
 **Why does the bot ignore me?**
 Your Telegram user ID is not in `ALLOWED_USER_IDS`. The log shows the ID at
-`WARNING` level.
+`WARNING` level, once per unknown sender.
 
 **Why does the bot not react to plain text in a group?**
 Telegram's privacy mode only delivers commands to bots in groups. Use a private
 chat per person; everyone still works on the same Mealie list.
+
+**Can I add the bot to a group?**
+Only if everyone in the group may see the list: the list message, the history
+and the first names of the people who changed it are visible to all members,
+even to those who are not in `ALLOWED_USER_IDS` (their own messages are
+ignored). Private chats are the intended setup.
+
+**The bot stops with "Cannot read TELEGRAM_BOT_TOKEN_FILE: Permission denied".**
+The secret files must be readable by user ID 10001, which the container runs
+as. See *Secret files* in [configuration.md](configuration.md).
 
 **Which list is used?**
 The one picked with `/lists`, otherwise `SHOPPING_LIST`, otherwise the first

@@ -59,6 +59,8 @@ services:
   #   security_opt:
   #     - no-new-privileges:true
 
+# The bot runs as UID 10001, so these files must be readable by that user:
+# chown 10001 secrets/* && chmod 0400 secrets/*  (see docs/configuration.md).
 secrets:
   telegram_bot_token:
     file: ./secrets/telegram_bot_token

@@ -22,6 +22,24 @@ be read from a file by setting `<NAME>_FILE` (Docker or Compose secrets).
 Invalid configuration stops the bot at start-up with exit code 2 and a message
 that never contains secret values.
 
+## Secret files
+
+Compose file secrets are mounted with the owner and mode of the file on the
+host. The bot runs as user ID 10001 inside the container, so the files must be
+readable by that ID; otherwise the bot stops with `Cannot read
+TELEGRAM_BOT_TOKEN_FILE: Permission denied`. Keep them unreadable for everyone
+else:
+
+```sh
+mkdir -p secrets
+printf '%s' '<telegram bot token>' > secrets/telegram_bot_token
+printf '%s' '<mealie api token>' > secrets/mealie_api_token
+sudo chown 10001 secrets/*
+chmod 0400 secrets/*
+```
+
+Do not commit the `secrets/` directory; it is listed in `.gitignore`.
+
 ## Category emoji
 
 Category buttons show an emoji picked from the label name: the first keyword
