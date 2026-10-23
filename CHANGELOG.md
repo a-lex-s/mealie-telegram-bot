@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Pin `pydantic` below 2.14 as aiogram requires; the two lock files agree
+  again and `pip check` runs in CI and in the image build.
+- The image no longer contains pip, setuptools or wheel.
+- Narrower gitleaks allowlist: lines mentioning `example.com` are no longer
+  skipped wholesale.
+
 ### Added
 
 - Shopping list helper: add items by message, list and tick off items with

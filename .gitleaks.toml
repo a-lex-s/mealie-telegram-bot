@@ -18,9 +18,10 @@ keywords = ["eyj"]
 
 [allowlist]
 description = "Placeholder values used in docs and tests"
+# Keep this list narrow: a broad pattern such as "example.com" would also hide a
+# real token that happens to share a line with it.
 regexes = [
   '''(?i)changeme''',
-  '''(?i)example\.com''',
   # False positive of generic-api-key on a class name.
   '''I18nMiddleware''',
 ]

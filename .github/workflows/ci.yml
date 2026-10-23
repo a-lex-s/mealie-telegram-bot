@@ -25,7 +25,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install dependencies
-        run: pip install --require-hashes -r requirements-dev.txt
+        run: |
+          pip install --require-hashes -r requirements-dev.txt
+          pip check
       - name: Ruff
         run: |
           ruff check .

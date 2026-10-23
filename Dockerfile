@@ -13,9 +13,13 @@ LABEL org.opencontainers.image.title="mealie-telegram-bot" \
 
 WORKDIR /app
 
-# Hash-locked dependencies; the build fails if anything does not match.
+# Hash-locked dependencies; the build fails if anything does not match or if the
+# locked versions contradict each other. pip and setuptools are not needed at
+# runtime and only add packages for vulnerability scanners to flag.
 COPY requirements.txt .
-RUN pip install --require-hashes --no-deps -r requirements.txt
+RUN pip install --require-hashes --no-deps -r requirements.txt \
+    && pip check \
+    && pip uninstall -y pip setuptools wheel
 
 COPY mealie_bot ./mealie_bot
 
