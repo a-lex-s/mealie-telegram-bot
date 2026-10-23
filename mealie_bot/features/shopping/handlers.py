@@ -263,8 +263,8 @@ async def _edit(
 
 
 def _user_id(message: Message) -> int:
-    assert message.from_user is not None  # guaranteed by AccessMiddleware
-    return message.from_user.id
+    # AccessMiddleware only lets messages with a known user through.
+    return message.from_user.id if message.from_user else 0
 
 
 def _user_name(message_or_query: Message | CallbackQuery) -> str:
@@ -372,7 +372,7 @@ def build_router(context: FeatureContext) -> Router:
             list_id=str(shopping_list["id"]),
             expanded={label_key(item) for item in result.items},
             added=result.items,
-            undo=result if result else None,
+            undo=result if result.undoable else None,
         )
         try:
             await ui.show(message, _user_id(message), tr, state)

@@ -49,6 +49,11 @@ def clean_text(text: str) -> str:
 
 _FRACTIONS = {"½": 0.5, "¼": 0.25, "¾": 0.75, "⅓": 1 / 3, "⅔": 2 / 3}
 _NUMBER = r"(?:\d+(?:[.,]\d+)?|\d+/\d+|[½¼¾⅓⅔])"
+# "1 1/2" or "1 ½": a whole number followed by a fraction.
+_MIXED = re.compile(r"^(?P<whole>\d+)$")
+_FRACTION = re.compile(r"^(?:\d+/\d+|[½¼¾⅓⅔])$")
+# Numbering such as "1." or "2)" at the start of a line is not a quantity.
+_NUMBERING = re.compile(r"^\d{1,2}[.)]\s+")
 # A quantity token, optionally glued to a unit or an "x" multiplier: "2", "1,5", "500g", "3x".
 _QTY_TOKEN = re.compile(rf"^(?P<qty>{_NUMBER})(?P<unit>[^\W\d_][\w.]*)?$", re.UNICODE)
 # Commas separate entries unless they sit between two digits ("1,5 l").
@@ -114,6 +119,10 @@ def parse_entry(text: str, known_units: Container[str]) -> ParsedEntry:
     tokens = text.split()
     if not tokens:
         return ParsedEntry(name="")
+    if len(tokens) > 2 and _MIXED.match(tokens[0]) and _FRACTION.match(tokens[1]):
+        fraction = parse_quantity(tokens[1])
+        if fraction is not None:
+            tokens = [str(int(tokens[0]) + fraction), *tokens[2:]]
 
     def is_unit(token: str) -> bool:
         return token.casefold() in known_units

@@ -95,10 +95,7 @@ async def test_list_endpoints_reject_empty_bodies(client, mealie_mock, call):
         await call(client)
 
 
-async def test_idempotent_requests_are_retried_once(client, mealie_mock, monkeypatch):
-    import mealie_bot.mealie.client as module
-
-    monkeypatch.setattr(module, "RETRY_DELAY_SECONDS", 0)
+async def test_idempotent_requests_are_retried_once(client, mealie_mock):
     route = mealie_mock.get("/api/units")
     route.side_effect = [httpx.ConnectError("boom"), httpx.Response(200, json={"items": [1]})]
     assert await client.get_units() == [1]

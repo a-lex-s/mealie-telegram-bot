@@ -43,6 +43,10 @@ UNITS = frozenset().union(*unit_synonyms().values())
         ("Cola 7up", ParsedEntry("Cola 7up")),
         ("Vitamin B12", ParsedEntry("Vitamin B12")),
         ("Tomaten aus der Dose", ParsedEntry("Tomaten aus der Dose")),
+        ("1 1/2 l Milch", ParsedEntry("Milch", 1.5, "l")),
+        ("2 ½ kg Mehl", ParsedEntry("Mehl", 2.5, "kg")),
+        ("2", ParsedEntry("2")),
+        ("Eier 10er", ParsedEntry("Eier 10er")),
     ],
 )
 def test_parse_entry(text, expected):
@@ -60,6 +64,8 @@ def test_unknown_glued_unit_is_name():
         ("1,5 l Milch, Eier", ["1,5 l Milch", "Eier"]),
         ("Milch\nEier\n\n- Brot", ["Milch", "Eier", "Brot"]),
         ("Milch; Eier", ["Milch", "Eier"]),
+        ("1. Mehl\n2) Zucker\n10. Salz", ["Mehl", "Zucker", "Salz"]),
+        ("1.5 kg Mehl", ["1.5 kg Mehl"]),
         (" , ,", []),
     ],
 )

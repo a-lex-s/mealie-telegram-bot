@@ -38,8 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Shopping list helper: add items by message, list and tick off items with
   inline buttons, choose a list, remove ticked-off items after confirmation.
-- Quantity and unit parsing (`2 l milk`, `500g flour`, `3x lemons`) mapped to
-  Mealie foods, units and labels.
+- Quantity and unit parsing (`2 l milk`, `500g flour`, `3x lemons`, `1 1/2 l`,
+  numbered lists) mapped to Mealie foods, units and labels.
 - English and German, chosen per user from the Telegram language or forced
   with `BOT_LANGUAGE`; bot description in the Telegram profile, expandable
   tips in `/start` and `/help`.

@@ -62,11 +62,17 @@ def test_required(missing):
         ("FEATURE_SHOPPING", "maybe"),
         ("LOG_LEVEL", "LOUD"),
         ("MEALIE_TIMEOUT", "-1"),
+        ("MEALIE_TIMEOUT", "soon"),
     ],
 )
 def test_invalid(key, value):
     with pytest.raises(ConfigError):
         Settings.from_env({**BASE, key: value})
+
+
+@pytest.mark.parametrize("value", ["true", "1", "YES", "on"])
+def test_true_spellings(value):
+    assert Settings.from_env({**BASE, "DELETE_COMMANDS": value}).delete_commands is True
 
 
 def test_options():

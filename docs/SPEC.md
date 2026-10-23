@@ -93,8 +93,8 @@ Mealie as done by that user. Its household determines which lists are visible.
 
 | Key | English | German | Action |
 |---|---|---|---|
-| start | `/start` | `/start` | Short introduction with an expandable tips block |
-| help | `/help` | `/hilfe` | Usage help of all enabled features |
+| start | `/start` | `/start` | Short greeting, then one introduction per enabled feature (shopping: example message and an expandable tips block) |
+| help | `/help` | `/hilfe` | Short intro, then one usage section per enabled feature |
 | list | `/list` | `/liste` | Show the active list |
 | lists | `/lists` | `/listen` | Choose the active list |
 | clear | `/clear` | `/aufraeumen` | Delete all ticked-off items of the active list, after confirmation |
@@ -141,7 +141,7 @@ Any text message that is not a command adds items to the active list.
 * Each entry may carry a quantity and a unit, in front or at the end:
   `2 l milk`, `500g flour`, `milk 2l`, `milk 2 l`, `3x lemons`, `3 x lemons`,
   `lemons x3`, `eggs 6`. Quantities may be decimals with `.` or `,`, fractions
-  like `1/2`, or `½ ¼ ¾ ⅓ ⅔`.
+  like `1/2`, `½ ¼ ¾ ⅓ ⅔`, or mixed numbers like `1 1/2` and `2 ½`.
 * A word is only treated as a unit if it is a known spelling: either from the
   unit synonyms in the catalogs (all languages) or a name, plural, abbreviation
   or alias of a unit in Mealie. A unit glued to a number must also be known, so

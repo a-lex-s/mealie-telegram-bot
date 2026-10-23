@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
 
+from mealie_bot.features.shopping.render import VIEW_DONE, VIEW_OPEN
 from mealie_bot.features.shopping.state import (
+    MAX_HISTORY_EVENTS,
     MAX_HISTORY_ITEMS,
     ChatState,
     HistoryEvent,
@@ -26,6 +28,21 @@ def test_consecutive_same_kind_events_merge():
         ("added", "Bob", ["Bread"]),
         ("checked", "Bob", ["Milk"]),
     ]
+
+
+def test_pending_events_are_capped():
+    chat = ChatState()
+    for i in range(MAX_HISTORY_EVENTS + 3):
+        chat.record(event("added" if i % 2 else "checked", items=[f"item {i}"], minutes=i))
+    assert len(chat.pending) == MAX_HISTORY_EVENTS
+    assert chat.pending[-1].items == [f"item {MAX_HISTORY_EVENTS + 2}"]
+
+
+def test_state_for_takes_the_view_from_the_callback_only_once():
+    chat = ChatState()
+    assert chat.state_for(1, VIEW_DONE).view == VIEW_DONE
+    assert chat.state_for(1, VIEW_OPEN).view == VIEW_DONE  # existing state wins
+    assert chat.state_for(2, "clear").view == VIEW_OPEN  # only the two list views count
 
 
 def test_take_pending_starts_or_extends_an_entry():

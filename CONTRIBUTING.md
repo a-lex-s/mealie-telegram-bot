@@ -105,7 +105,10 @@ spellings, and register the module in `mealie_bot/i18n/__init__.py`.
 
 Create a package under `mealie_bot/features/` that exports a `Feature`, add it
 to `available_features()` and to `KNOWN_FEATURES` in `mealie_bot/config.py`.
-The module is then switched on or off with `FEATURE_<NAME>`.
+The module is then switched on or off with `FEATURE_<NAME>`. A `Feature` names
+its menu commands and two catalog keys, `start_key` and `help_key`, whose texts
+become the module's sections of `/start` and `/help` (the core only adds a
+greeting and the help intro).
 
 ## Releases
 

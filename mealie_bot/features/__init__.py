@@ -22,7 +22,8 @@ class Feature:
     name: str
     # Command keys from the i18n catalog shown in the Telegram menu.
     commands: tuple[str, ...]
-    # Catalog key of this feature's section in /help.
+    # Catalog keys of this feature's sections in /start and /help.
+    start_key: str
     help_key: str
     build_router: Callable[[FeatureContext], Router]
 

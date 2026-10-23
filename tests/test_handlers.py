@@ -93,11 +93,13 @@ def settings(**overrides):
 
 
 @pytest.fixture
-async def harness(mealie_mock):
+async def harness(mealie_mock, request):
+    """Dispatcher with recording Telegram session; parametrize with Settings overrides."""
+    overrides = getattr(request, "param", {})
     client = MealieClient(BASE_URL, TOKEN)
     session = RecordingSession()
     bot = Bot("123456:placeholder", session=session)
-    dispatcher = build_dispatcher(settings(), client)
+    dispatcher = build_dispatcher(settings(**overrides), client)
     mealie_mock.get("/api/households/shopping/lists").respond(
         json={"items": [{"id": LIST_ID, "name": "Groceries"}]}
     )
@@ -161,9 +163,10 @@ def callback(data, user_id=ALICE, message_id=5, language="de", chat_id=None):
 @pytest.mark.parametrize(
     ("command", "language", "expected"),
     [
+        ("/start", "en", "👋 <b>Hi!</b>\n\n<b>I am your shopping list.</b>"),
         ("/start", "en", "/list shows the list"),
         ("/start", "de", "/liste zeigt die Liste"),
-        ("/help", "en", "/lists switches"),
+        ("/help", "en", "/help shows this again.\n\n<b>🛒 Shopping list</b>"),
         ("/help", "de", "/listen wechselt"),
         ("/hilfe", "de", "/aufraeumen entfernt"),
     ],
@@ -197,23 +200,15 @@ async def test_text_adds_items_and_shows_list_with_undo(harness, mealie_mock):
     assert (deleted.chat_id, deleted.message_id) == (ALICE, 1)
 
 
-async def test_item_messages_are_kept_when_configured(mealie_mock):
-    client = MealieClient(BASE_URL, TOKEN)
-    session = RecordingSession()
-    bot = Bot("123456:placeholder", session=session)
-    dispatcher = build_dispatcher(settings(delete_item_messages=False), client)
-    mealie_mock.get("/api/households/shopping/lists").respond(
-        json={"items": [{"id": LIST_ID, "name": "Groceries"}]}
-    )
-    mealie_mock.get("/api/units").respond(json={"items": []})
-    mealie_mock.get("/api/foods").respond(json={"items": []})
+@pytest.mark.parametrize("harness", [{"delete_item_messages": False}], indirect=True)
+async def test_item_messages_are_kept_when_configured(harness, mealie_mock):
+    feed, session = harness
     mock_list(mealie_mock)
     mealie_mock.post("/api/households/shopping/items/create-bulk").respond(
         201, json={"createdItems": [make_item("n-1", "Eggs")]}
     )
-    await dispatcher.feed_update(bot, message("eggs"))
+    await feed(message("eggs"))
     assert session.sent(SendMessage) and not session.sent(DeleteMessage)
-    await client.aclose()
 
 
 async def test_item_message_stays_when_mealie_fails(harness, mealie_mock):
@@ -249,7 +244,7 @@ async def test_undo_deletes_created_and_restores_merged_items(harness, mealie_mo
         },
     )
     await feed(message("milk, eggs"))
-    list_message_id = session.last(SendMessage).chat_id and session.next_id
+    list_message_id = session.next_id
 
     delete = mealie_mock.delete("/api/households/shopping/items").respond(json={})
     put = mealie_mock.put("/api/households/shopping/items/m-1").respond(json={})
@@ -344,18 +339,12 @@ async def test_list_command_in_german_collapsed_and_tidy(harness, mealie_mock):
     assert (deleted.chat_id, deleted.message_id) == (BOB, 7)
 
 
-async def test_commands_are_kept_when_configured(mealie_mock):
-    client = MealieClient(BASE_URL, TOKEN)
-    session = RecordingSession()
-    bot = Bot("123456:placeholder", session=session)
-    dispatcher = build_dispatcher(settings(delete_commands=False), client)
-    mealie_mock.get("/api/households/shopping/lists").respond(
-        json={"items": [{"id": LIST_ID, "name": "Groceries"}]}
-    )
+@pytest.mark.parametrize("harness", [{"delete_commands": False}], indirect=True)
+async def test_commands_are_kept_when_configured(harness, mealie_mock):
+    feed, session = harness
     mock_list(mealie_mock)
-    await dispatcher.feed_update(bot, message("/list"))
+    await feed(message("/list"))
     assert session.sent(SendMessage) and not session.sent(DeleteMessage)
-    await client.aclose()
 
 
 async def test_toggle_expands_category(harness, mealie_mock):
@@ -398,22 +387,16 @@ async def test_list_command_resends_when_the_command_could_not_be_deleted(harnes
     assert first in [d.message_id for d in session.sent(DeleteMessage)]
 
 
-async def test_list_command_that_stays_in_the_chat_resends_the_list(mealie_mock):
-    client = MealieClient(BASE_URL, TOKEN)
-    session = RecordingSession()
-    bot = Bot("123456:placeholder", session=session)
-    dispatcher = build_dispatcher(settings(delete_commands=False), client)
-    mealie_mock.get("/api/households/shopping/lists").respond(
-        json={"items": [{"id": LIST_ID, "name": "Groceries"}]}
-    )
+@pytest.mark.parametrize("harness", [{"delete_commands": False}], indirect=True)
+async def test_list_command_that_stays_in_the_chat_resends_the_list(harness, mealie_mock):
+    feed, session = harness
     mock_list(mealie_mock, make_item("i-1", "Milk"))
-    await dispatcher.feed_update(bot, message("/list"))
+    await feed(message("/list"))
     first = session.next_id
-    await dispatcher.feed_update(bot, message("/list", message_id=2))
+    await feed(message("/list", message_id=2))
     assert len(session.sent(SendMessage)) == 2
     # The old list message is deleted (nothing changed, so no history entry).
     assert first in [d.message_id for d in session.sent(DeleteMessage)]
-    await client.aclose()
 
 
 async def test_concurrent_texts_are_handled_one_after_another(harness, mealie_mock):

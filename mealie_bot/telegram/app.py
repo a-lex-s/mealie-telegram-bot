@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 from aiogram import Bot, Dispatcher, Router
 from aiogram.filters import Command, CommandStart
@@ -29,21 +30,20 @@ def _command_args(tr: Translator) -> dict[str, str]:
 def build_core_router(features: list[Feature]) -> Router:
     router = Router(name="core")
 
-    def help_text(tr: Translator) -> str:
+    def sections(tr: Translator, intro_key: str, key: Callable[[Feature], str]) -> str:
+        """The intro followed by one section per enabled feature."""
         if not features:
             return tr("help.no_features")
-        return "\n\n".join(tr(feature.help_key, **_command_args(tr)) for feature in features)
+        args = _command_args(tr)
+        return "\n\n".join([tr(intro_key, **args), *(tr(key(f), **args) for f in features)])
 
     @router.message(CommandStart())
     async def cmd_start(message: Message, tr: Translator) -> None:
-        if features:
-            await message.answer(tr("start", **_command_args(tr)))
-        else:
-            await message.answer(tr("help.no_features"))
+        await message.answer(sections(tr, "start", lambda f: f.start_key))
 
     @router.message(Command(*command_names("help")))
     async def cmd_help(message: Message, tr: Translator) -> None:
-        await message.answer(help_text(tr))
+        await message.answer(sections(tr, "help", lambda f: f.help_key))
 
     return router
 

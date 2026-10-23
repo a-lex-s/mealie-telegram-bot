@@ -11,6 +11,13 @@ LIST_ID = "11111111-1111-4111-8111-111111111111"
 OTHER_LIST_ID = "22222222-2222-4222-8222-222222222222"
 
 
+@pytest.fixture(autouse=True)
+def no_retry_delay(monkeypatch):
+    import mealie_bot.mealie.client as client_module
+
+    monkeypatch.setattr(client_module, "RETRY_DELAY_SECONDS", 0)
+
+
 @pytest.fixture
 def mealie_mock():
     with respx.mock(base_url=BASE_URL, assert_all_called=False) as mock:

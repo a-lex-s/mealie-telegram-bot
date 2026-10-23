@@ -17,7 +17,6 @@ from aiogram.enums import ButtonStyle
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from mealie_bot.features.shopping.parser import ParsedEntry
 from mealie_bot.features.shopping.service import AddResult
 from mealie_bot.i18n import Translator
 from mealie_bot.i18n.labels import label_emoji
@@ -101,16 +100,6 @@ def format_quantity(quantity: float, language: str) -> str:
     rounded = round(quantity, 2)
     text = f"{rounded:g}" if rounded != int(rounded) else str(int(rounded))
     return text.replace(".", ",") if language == "de" else text
-
-
-def entry_display(entry: ParsedEntry, language: str) -> str:
-    parts = []
-    if entry.quantity is not None:
-        parts.append(format_quantity(entry.quantity, language))
-    if entry.unit:
-        parts.append(entry.unit)
-    parts.append(entry.name)
-    return " ".join(parts)
 
 
 def item_parts(item: JSON, language: str) -> tuple[str, str]:

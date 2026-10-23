@@ -210,7 +210,7 @@ def test_label_emoji_overrides_reach_headers_and_added_quote():
     assert "<b>Pepper</b> · <i>🌶️ Würzmittel</i>" in text
 
 
-def test_quantities_and_entries():
+def test_quantities_and_progress():
     assert format_quantity(1.5, "de") == "1,5"
     assert format_quantity(2.0, "en") == "2"
     assert format_quantity(0.5, "en") == "½"

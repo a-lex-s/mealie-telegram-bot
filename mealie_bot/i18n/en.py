@@ -15,8 +15,11 @@ MESSAGES: dict[str, str] = {
         "tap to tick items off, everyone sees the same list."
     ),
     "bot.short_description": "Shopping list for your Mealie instance",
-    "start": (
-        "👋 <b>Hi! I am your shopping list.</b>\n\n"
+    # /start and /help: a short intro, then one section per enabled feature.
+    "start": "👋 <b>Hi!</b>",
+    "help": "<b>Help</b> · /{help} shows this again.",
+    "start.shopping": (
+        "<b>I am your shopping list.</b> "
         "Just send me what you need:\n"
         "<code>2 l milk, 500 g flour, eggs</code>\n\n"
         "<blockquote expandable>💡 <b>Tips and commands</b>\n"
@@ -27,7 +30,7 @@ MESSAGES: dict[str, str] = {
         "/{lists} switches lists · /{clear} removes ticked-off items · "
         "/{help} shows this again</blockquote>"
     ),
-    "help": (
+    "help.shopping": (
         "<b>🛒 Shopping list</b>\n"
         "Send items as text, one per line or separated by commas. "
         "Quantities and units are optional:\n"

@@ -14,8 +14,11 @@ MESSAGES: dict[str, str] = {
         "tippe zum Abhaken, alle sehen dieselbe Liste."
     ),
     "bot.short_description": "Einkaufsliste für deine Mealie-Instanz",
-    "start": (
-        "👋 <b>Hallo! Ich bin deine Einkaufsliste.</b>\n\n"
+    # /start and /help: a short intro, then one section per enabled feature.
+    "start": "👋 <b>Hallo!</b>",
+    "help": "<b>Hilfe</b> · /{help} zeigt das hier noch einmal.",
+    "start.shopping": (
+        "<b>Ich bin deine Einkaufsliste.</b> "
         "Schick mir einfach, was du brauchst:\n"
         "<code>2 l Milch, 500 g Mehl, Eier</code>\n\n"
         "<blockquote expandable>💡 <b>Tipps und Befehle</b>\n"
@@ -26,7 +29,7 @@ MESSAGES: dict[str, str] = {
         "/{lists} wechselt die Liste · /{clear} entfernt Erledigtes · "
         "/{help} zeigt alles noch einmal</blockquote>"
     ),
-    "help": (
+    "help.shopping": (
         "<b>🛒 Einkaufsliste</b>\n"
         "Schick Einträge als Text, einen pro Zeile oder mit Komma getrennt. "
         "Menge und Einheit sind optional:\n"

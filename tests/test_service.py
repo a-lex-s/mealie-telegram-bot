@@ -161,11 +161,12 @@ async def test_add_entries_posts_bulk_and_reports_merges(service, mealie_mock):
     assert [i["note"] for i in body] == ["a", "b"]
     assert [i["id"] for i in result.items] == ["new", "old"]
     assert result.previous == [existing]
-    assert result
+    assert result.undoable
 
 
 async def test_add_nothing(service, mealie_mock):
-    assert not await service.add_entries(LIST_ID, [])
+    result = await service.add_entries(LIST_ID, [])
+    assert not result.items and not result.undoable
 
 
 async def test_undo_add(service, mealie_mock):

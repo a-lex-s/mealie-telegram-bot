@@ -86,9 +86,12 @@ class AddResult:
 
     @property
     def items(self) -> list[JSON]:
+        """Everything Mealie stored for the request: new items and merged ones."""
         return self.created + self.updated
 
-    def __bool__(self) -> bool:
+    @property
+    def undoable(self) -> bool:
+        """True if undo_add would change anything (created items or known previous versions)."""
         return bool(self.created or self.previous)
 
 
