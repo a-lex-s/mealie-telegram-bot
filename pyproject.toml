@@ -10,7 +10,7 @@ dependencies = [
   "aiogram>=3.31,<4",
   "httpx>=0.28,<0.29",
   # aiogram 3.31 supports pydantic < 2.14 only; keep the lock files inside that range.
-  "pydantic>=2.4.1,<2.14",
+  "pydantic>=2.4.1,<2.15",
 ]
 
 [tool.ruff]
