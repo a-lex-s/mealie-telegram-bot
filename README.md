@@ -66,10 +66,18 @@ digest for pinning. All settings: [docs/configuration.md](docs/configuration.md)
 | `/list` | `/liste` | Show the list; tap a category to open it, tap an item to tick it off |
 | `/lists` | `/listen` | Choose which shopping list to use |
 | `/clear` | `/aufraeumen` | Remove ticked-off items (asks first) |
+| `/category` | `/kategorie` | Create a category |
+| `/categories` | `/kategorien` | Show all categories |
 | `/help` | `/hilfe` | Show help |
 
 Any other message adds items, one per line or separated by commas. The list
 then shows what was added, with an *Undo* button.
+
+A line with an arrow sorts products into a category, for good:
+`Ketchup → Condiments` (also `->`, `=>` or `>`, several products with commas). A new
+category or an unknown product is created after a short question. Category
+buttons show the label's colour from Mealie as a circle (`🟣 🧂 Condiments`);
+`LABEL_ICONS` switches circles or emojis off.
 
 ## Documentation
 

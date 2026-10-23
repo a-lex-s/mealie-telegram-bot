@@ -5,6 +5,8 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "list": ("liste", "Liste anzeigen"),
     "clear": ("aufraeumen", "Erledigtes entfernen"),
     "lists": ("listen", "Andere Liste wählen"),
+    "category": ("kategorie", "Kategorie anlegen"),
+    "categories": ("kategorien", "Kategorien anzeigen"),
     "help": ("hilfe", "Hilfe"),
 }
 
@@ -26,6 +28,7 @@ MESSAGES: dict[str, str] = {
         "<code>3x Zitronen</code>, <code>½ Brot</code>\n"
         "Ein Eintrag pro Zeile oder mit Komma getrennt\n"
         "/{list} zeigt die Liste, ein Tipp auf einen Eintrag hakt ihn ab\n"
+        "<code>Ketchup → Würzmittel</code> sortiert ein Produkt in eine Kategorie\n"
         "/{lists} wechselt die Liste · /{clear} entfernt Erledigtes · "
         "/{help} zeigt alles noch einmal</blockquote>"
     ),
@@ -39,6 +42,13 @@ MESSAGES: dict[str, str] = {
         "Eintrag hakt ihn ab.\n"
         "/{lists} wechselt zu einer anderen Einkaufsliste.\n"
         "/{clear} entfernt alle erledigten Einträge, nach Bestätigung.\n\n"
+        "<b>🏷️ Kategorien</b>\n"
+        "<code>Ketchup → Würzmittel</code> sortiert ein Produkt dauerhaft in eine Kategorie "
+        "(auch <code>-></code>, <code>=></code> oder <code>></code>; mehrere Produkte: "
+        "<code>Senf, Mayo → Würzmittel</code>). "
+        "Eine neue Kategorie wird nach Rückfrage angelegt; ein Produkt, das Mealie noch "
+        "nicht kennt, ebenfalls.\n"
+        "/{category} legt eine Kategorie an, /{categories} zeigt alle.\n\n"
         "<blockquote expandable>💡 <b>So verhält sich die Liste</b>\n"
         "Es gibt immer eine Listen-Nachricht, ganz unten im Chat. "
         "Wenn du etwas hinzufügst, rückt sie nach unten, und die alte Nachricht wird zu "
@@ -63,6 +73,34 @@ MESSAGES: dict[str, str] = {
         "Bitte noch einmal versuchen oder in Mealie nachsehen."
     ),
     "error.only_text": "Ich verstehe nur Text. Schick die Einträge als Nachricht, oder /hilfe.",
+    # Kategorien
+    "category.usage": (
+        "🏷️ Gib der Kategorie einen Namen: <code>/{category} Haushalt</code>. "
+        "Oder sortiere direkt ein Produkt ein: <code>Schwämme → Haushalt</code>"
+    ),
+    "category.too_long": "⚠️ Ein Kategoriename darf höchstens {max} Zeichen lang sein.",
+    "category.exists": "🏷️ Die Kategorie <b>{label}</b> gibt es schon.",
+    "category.created": "🏷️ <b>Neue Kategorie:</b> {label}",
+    "category.list_header": "🏷️ <b>Kategorien</b> ({count})",
+    "category.list_line": "{label} · {count}",
+    "category.list_none": (
+        "🏷️ Es gibt noch keine Kategorien. "
+        "Leg eine an mit /{category} oder mit <code>Ketchup → Würzmittel</code>."
+    ),
+    "category.list_uncategorized": (
+        "📦 Ohne Kategorie: {foods} Produkte, {items} offen auf dieser Liste"
+    ),
+    "assign.not_understood": (
+        "Das konnte ich nicht lesen. Beispiel: <code>Ketchup → Würzmittel</code> "
+        "oder <code>Senf, Mayo -> Würzmittel</code>, eine Kategorie pro Zeile."
+    ),
+    "assign.ask_label": "❓ Die Kategorie <b>{label}</b> gibt es noch nicht.",
+    "assign.btn_label_new": "➕ {label} anlegen",
+    "assign.btn_label_use": "{label} nehmen",
+    "assign.ask_food": "❓ <b>{name}</b> kenne ich nicht. Meinst du <b>{food}</b>?",
+    "assign.btn_food_use": "Ja, {food}",
+    "assign.btn_food_new": "➕ Nein, {name} anlegen",
+    "assign.stale": "⚠️ Die Frage ist nicht mehr offen. Bitte schick die Zeile noch einmal.",
     "error.unknown_command": "Den Befehl kenne ich nicht. /hilfe zeigt, was ich kann.",
     "shopping.list_header": "🛒 <b>{list}</b>",
     "shopping.count_open": "{count} offen",
@@ -71,6 +109,8 @@ MESSAGES: dict[str, str] = {
     "shopping.list_all_done": "🎉 Alles gekauft.",
     "shopping.added_header": "➕ <b>Hinzugefügt</b> ({count})",
     "shopping.added_one": "➕ <b>Hinzugefügt:</b> {item}",
+    "shopping.sorted_header": "🏷️ <b>Einsortiert</b> ({count})",
+    "shopping.sorted_one": "🏷️ <b>Einsortiert:</b> {item}",
     "shopping.done_quote": "✅ <b>Erledigt</b>",
     "shopping.updated_at": "<i>Stand {time}</i>",
     "shopping.more": "… und {count} weitere (alle in Mealie sichtbar)",
@@ -115,6 +155,8 @@ MESSAGES: dict[str, str] = {
     "history.cleared.one": "🧹 1 Eintrag entfernt",
     "history.undone": "↩️ {count} Einträge rückgängig",
     "history.undone.one": "↩️ 1 Eintrag rückgängig",
+    "history.sorted": "🏷️ {items}",
+    "history.label": "🏷️ neue Kategorie {items}",
 }
 
 UNITS: dict[str, list[str]] = {

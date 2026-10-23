@@ -7,7 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- Categories from the chat: `Ketchup → Condiments` (also `->`, `=>`, `>`;
+  several products with commas, one category per line) puts products into a
+  Mealie label for good. The bot asks once before it creates a category or when
+  a similarly named food exists, creates unknown foods, updates the items on
+  the list, shows a *Sorted* quote and supports *Undo*.
+- `/category` (`/kategorie`) creates a category, `/categories`
+  (`/kategorien`) lists them with their number of products and what has no
+  category yet.
+- Category buttons show the label's colour from Mealie as a circle
+  (`🟣 🧂 Condiments`); a label without an emoji match shows just its circle
+  instead of 📦. An emoji at the start of a label name in Mealie is used as
+  its emoji.
+- `LABEL_ICONS` (`both`, `color`, `emoji`, `none`) chooses what is shown in
+  front of category names.
 
 ## [0.1.0] - 2026-10-23
 

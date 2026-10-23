@@ -1,5 +1,7 @@
 from datetime import datetime
 
+import pytest
+
 from mealie_bot.features.shopping.render import (
     MAX_ITEM_BUTTONS,
     MAX_QUOTE_ITEMS,
@@ -13,11 +15,13 @@ from mealie_bot.features.shopping.render import (
     item_display,
     item_html,
     item_inline,
+    label_text,
     progress_bar,
     render_list,
 )
-from mealie_bot.features.shopping.service import AddResult
+from mealie_bot.features.shopping.service import AddResult, AssignResult
 from mealie_bot.i18n import Translator
+from mealie_bot.i18n.labels import LabelIcons
 from tests.conftest import make_item
 
 EN = Translator("en")
@@ -236,3 +240,66 @@ def test_categories_follow_the_order_set_in_mealie():
     _, markup = render_list("G", items, ListState(), EN, label_order=order)
     headers = [text.split(" (")[0] for text in button_texts(markup)[:4]]
     assert headers == ["🍎 Fruit", "🥛 Dairy", "🍞 Bakery", "📦 Other"]
+
+
+# --- categories: colours, own emoji, sorted quote -----------------------------
+
+
+def test_label_text_combines_colour_circle_emoji_and_name():
+    assert label_text("Würzmittel", "#9b7bb8") == "🟣 🧂 Würzmittel"
+    assert label_text("Würzmittel", "#959595") == "🧂 Würzmittel"  # Mealie's default grey
+    assert label_text("Drogerie", None, {"drogerie": "🧴"}) == "🧴 Drogerie"
+    assert label_text("🧴 Drogerie", "#d58cc0") == "🟣 🧴 Drogerie"  # own emoji, shown once
+    # An own category without keyword: the colour stands in for the emoji …
+    assert label_text("Eigenes", "#5cb85c") == "🟢 Eigenes"
+    # … and only a label with neither gets the fallback.
+    assert label_text("Eigenes", None) == "📦 Eigenes"
+
+
+@pytest.mark.parametrize(
+    ("mode", "spices", "own", "plain"),
+    [
+        ("both", "🟣 🧂 Würzmittel", "🟢 Eigenes", "📦 Eigenes"),
+        ("color", "🟣 Würzmittel", "🟢 Eigenes", "Eigenes"),
+        ("emoji", "🧂 Würzmittel", "📦 Eigenes", "📦 Eigenes"),
+        ("none", "Würzmittel", "Eigenes", "Eigenes"),
+    ],
+)
+def test_label_icons_switch_circles_and_emojis(mode, spices, own, plain):
+    icons = LabelIcons.from_mode(mode)
+    assert label_text("Würzmittel", "#9b7bb8", icons) == spices
+    assert label_text("Eigenes", "#5cb85c", icons) == own
+    assert label_text("Eigenes", None, icons) == plain
+    # An emoji in the Mealie name counts as an emoji.
+    expected = "Drogerie" if mode in {"color", "none"} else "🧴 Drogerie"
+    assert label_text("🧴 Drogerie", None, icons) == expected
+    overrides = LabelIcons.from_mode(mode, {"eigenes": "🐾"})
+    assert ("🐾" in label_text("Eigenes", None, overrides)) == (mode in {"both", "emoji"})
+
+
+def test_category_headers_show_the_label_colour():
+    items = [
+        make_item("1", "Soap", label="Eigenes"),
+        make_item("2", "Mustard", label="Würzmittel"),
+    ]
+    items[0]["label"]["color"] = "#5cb85c"
+    items[1]["label"]["color"] = "#9b7bb8"
+    _, markup = render_list("Groceries", items, ListState(), EN, now=NOW)
+    assert button_texts(markup)[:2] == ["🟢 Eigenes (1) ▸", "🟣 🧂 Würzmittel (1) ▸"]
+
+
+def test_sorted_quote_and_notice():
+    label = {"id": "lab-1", "name": "Würzmittel", "color": "#9b7bb8"}
+    state = ListState(sorted_into=[("Ketchup", label)], notice="🏷️ <b>New category:</b> x")
+    text, _ = render_list("Groceries", [], state, EN, now=NOW)
+    assert "🏷️ <b>New category:</b> x\n" in text
+    assert "🏷️ <b>Sorted:</b> <b>Ketchup</b> · <i>🟣 🧂 Würzmittel</i>" in text
+    state = ListState(sorted_into=[("Ketchup", label), ("Senf", label)])
+    text, _ = render_list("Groceries", [], state, DE, now=NOW)
+    assert "<blockquote expandable>🏷️ <b>Einsortiert</b> (2)\n<b>Ketchup</b>" in text
+
+
+def test_assign_undo_button_is_offered():
+    state = ListState(undo=AssignResult(created_food_ids=["f-1"]))
+    _, markup = render_list("Groceries", [], state, EN, now=NOW)
+    assert button_texts(markup)[0] == "↩️ Undo"

@@ -32,33 +32,55 @@ from html import escape
 from aiogram import Bot, F, Router
 from aiogram.enums import ChatAction
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
-from aiogram.filters import Command
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
+from aiogram.filters import Command, CommandObject
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from mealie_bot.features import FeatureContext
 from mealie_bot.features.shopping.parser import (
+    MAX_LABEL_LENGTH,
     EntryTooLong,
+    InvalidAssignment,
+    LabelTooLong,
     TooManyEntries,
+    clean_text,
+    has_arrow,
+    parse_assignments,
     parse_message,
 )
 from mealie_bot.features.shopping.render import (
+    STYLE_DONE,
     VIEW_CLEAR,
     VIEW_DONE,
     VIEW_LISTS,
     VIEW_OPEN,
+    AssignAnswer,
     ItemAction,
     ListAction,
     ListState,
     SelectList,
     item_display,
     item_inline,
+    label_dict_text,
     label_key,
+    label_text,
     render_list,
     toast_text,
 )
-from mealie_bot.features.shopping.service import ListView, NoShoppingListError, ShoppingService
-from mealie_bot.features.shopping.state import ChatState, HistoryEvent, render_history
+from mealie_bot.features.shopping.service import (
+    AddResult,
+    AssignResult,
+    ListView,
+    NoShoppingListError,
+    ShoppingService,
+)
+from mealie_bot.features.shopping.state import (
+    ChatState,
+    HistoryEvent,
+    PendingAssignment,
+    render_history,
+)
 from mealie_bot.i18n import Translator, command_names
+from mealie_bot.i18n.labels import LabelIcons
 from mealie_bot.mealie import MealieError, MealieNotFound
 
 log = logging.getLogger(__name__)
@@ -92,11 +114,14 @@ class ShoppingUI:
         delete_item_messages: bool,
         clock: Clock = _local_now,
         label_emoji: Mapping[str, str] | None = None,
+        label_icons: str = "both",
     ) -> None:
         self.service = service
         self.delete_commands = delete_commands
         self.delete_item_messages = delete_item_messages
         self.label_emoji = label_emoji
+        # Display settings for categories (LABEL_ICONS plus LABEL_EMOJI overrides).
+        self.label_icons = LabelIcons.from_mode(label_icons, label_emoji)
         self.clock = clock
         self.chats: dict[int, ChatState] = {}
         # Last fetched list per chat with its fetch time, so toggles need no round trip.
@@ -137,7 +162,7 @@ class ShoppingUI:
             state,
             tr,
             now=now,
-            emoji=self.label_emoji,
+            emoji=self.label_icons,
             lists=lists,
             active_id=list_id,
             label_order=data.label_order,
@@ -211,8 +236,10 @@ class ShoppingUI:
                 log.warning("Syncing list for another chat failed: %s", exc)
 
     async def _drop_errors(self, message: Message, chat: ChatState) -> None:
-        """Delete the bot's own error messages once the list is shown again."""
-        ids, chat.error_message_ids = chat.error_message_ids, []
+        """Delete the bot's own error and info messages, and questions nobody
+        answered, once the list is shown again."""
+        ids = [*chat.transient_message_ids, *chat.questions]
+        chat.transient_message_ids, chat.questions = [], {}
         if message.bot is None:  # pragma: no cover - messages from the dispatcher carry a bot
             return
         for message_id in ids:
@@ -337,6 +364,7 @@ def build_router(context: FeatureContext) -> Router:
         delete_commands=context.settings.delete_commands,
         delete_item_messages=context.settings.delete_item_messages,
         label_emoji=context.settings.label_emoji,
+        label_icons=context.settings.label_icons,
     )
     router = Router(name="shopping")
 
@@ -350,7 +378,7 @@ def build_router(context: FeatureContext) -> Router:
         else:
             log.warning("Mealie request failed: %s", exc)
             sent = await target.answer(tr("error.mealie"))
-        ui.chat(target.chat.id).error_message_ids.append(sent.message_id)
+        ui.chat(target.chat.id).transient_message_ids.append(sent.message_id)
 
     async def toast_error(query: CallbackQuery, tr: Translator, exc: Exception) -> None:
         log.warning("Mealie request failed: %s", exc)
@@ -388,10 +416,339 @@ def build_router(context: FeatureContext) -> Router:
     async def cmd_clear(message: Message, tr: Translator) -> None:
         await show_command(message, tr, ListState(view=VIEW_CLEAR))
 
+    async def send_transient(target: Message, text: str) -> None:
+        """An info message that goes when the list is next shown, like an error."""
+        sent = await target.answer(text)
+        ui.chat(target.chat.id).transient_message_ids.append(sent.message_id)
+
+    @router.message(Command(*command_names("category")))
+    async def cmd_category(message: Message, command: CommandObject, tr: Translator) -> None:
+        name = " ".join(clean_text(command.args or "").split())
+        if not name:
+            await send_transient(message, tr("category.usage", category=tr.command("category")))
+            return
+        if len(name) > MAX_LABEL_LENGTH:
+            await send_transient(message, tr("category.too_long", max=MAX_LABEL_LENGTH))
+            return
+        async with ui.locked(message.chat.id):
+            try:
+                existing = await service.find_label(name)
+                if existing is not None:
+                    shown = escape(label_dict_text(existing, tr, ui.label_icons))
+                    await send_transient(message, tr("category.exists", label=shown))
+                    return
+                label = await service.create_label(name, ui.label_emoji)
+            except MealieError as exc:
+                await send_error(message, tr, exc)
+                return
+            shown = label_dict_text(label, tr, ui.label_icons)
+            ui.record(message.chat.id, "label", message, [shown])
+            await ui.tidy(message)
+            try:
+                await ui.show(
+                    message, tr, ListState(notice=tr("category.created", label=escape(shown)))
+                )
+            except _SHOW_ERRORS as exc:
+                await send_error(message, tr, exc)
+
+    @router.message(Command(*command_names("categories")))
+    async def cmd_categories(message: Message, tr: Translator) -> None:
+        async with ui.locked(message.chat.id):
+            try:
+                shopping_list = await service.active_list(message.chat.id)
+                counts = await service.label_counts(str(shopping_list["id"]))
+            except (MealieError, NoShoppingListError) as exc:
+                await send_error(message, tr, exc)
+                return
+            await ui.tidy(message)
+            if counts.labels:
+                lines = [tr("category.list_header", count=len(counts.labels))]
+                lines.extend(
+                    tr(
+                        "category.list_line",
+                        label=escape(label_dict_text(label, tr, ui.label_icons)),
+                        count=counts.foods_per_label.get(str(label["id"]), 0),
+                    )
+                    for label in counts.labels
+                )
+            else:
+                lines = [tr("category.list_none", category=tr.command("category"))]
+            lines.append(
+                tr(
+                    "category.list_uncategorized",
+                    foods=counts.foods_without_label,
+                    items=counts.items_without_label,
+                )
+            )
+            await send_transient(message, "\n".join(lines))
+
     @router.message(F.text & ~F.text.startswith("/"))
     async def add_items(message: Message, tr: Translator) -> None:
         async with ui.locked(message.chat.id):
-            await add_items_locked(message, tr)
+            if has_arrow(message.text or ""):
+                await assign_locked(message, tr)
+            else:
+                await add_items_locked(message, tr)
+
+    # --- "items → category" -----------------------------------------------
+
+    async def assign_locked(message: Message, tr: Translator) -> None:
+        try:
+            units = await service.units()
+            try:
+                assignments = parse_assignments(message.text or "", units.known_tokens)
+            except LabelTooLong as exc:
+                await message.answer(tr("category.too_long", max=exc.limit))
+                return
+            except TooManyEntries as exc:
+                await message.answer(tr("error.too_many", max=exc.limit))
+                return
+            except InvalidAssignment:
+                await message.answer(tr("assign.not_understood"))
+                return
+            shopping_list = await service.active_list(message.chat.id)
+        except (MealieError, NoShoppingListError) as exc:
+            await send_error(message, tr, exc)
+            return
+        pending = PendingAssignment(
+            list_id=str(shopping_list["id"]),
+            user_message_id=message.message_id,
+            assignments=assignments,
+        )
+        await advance_assignment(message, None, pending, tr, message)
+
+    async def advance_assignment(
+        message: Message,
+        question: Message | None,
+        pending: PendingAssignment,
+        tr: Translator,
+        actor: Message | CallbackQuery,
+    ) -> None:
+        """Resolve the next unknown name, asking when needed, and finally assign.
+
+        ``message`` is any message in the chat to answer to; ``question`` is the
+        bot's open question message, edited for the next question and deleted
+        at the end; ``actor`` is the user's message or tap, for the history.
+        """
+        chat = ui.chat(message.chat.id)
+        try:
+            text, markup = await next_question(pending, tr)
+        except MealieError as exc:
+            if question is not None:
+                # The answer counts; the open question can be answered again later.
+                chat.questions[question.message_id] = pending
+            await send_error(message, tr, exc)
+            return
+        if text is not None:
+            if question is not None:
+                with suppress(*_TELEGRAM_ERRORS):
+                    await _edit(message.bot, message.chat.id, question.message_id, text, markup)
+                chat.questions[question.message_id] = pending
+            else:
+                sent = await message.answer(text, reply_markup=markup)
+                chat.questions[sent.message_id] = pending
+            return
+        if question is not None and message.bot is not None:
+            with suppress(*_TELEGRAM_ERRORS):
+                await message.bot.delete_message(message.chat.id, question.message_id)
+        await run_assignment(message, pending, tr, actor)
+
+    async def next_question(
+        pending: PendingAssignment, tr: Translator
+    ) -> tuple[str | None, InlineKeyboardMarkup]:
+        """Resolve labels and foods that are known; return the question for the first
+        one that is not, or ``(None, …)`` when everything is resolved."""
+        empty = InlineKeyboardMarkup(inline_keyboard=[])
+        cancel = InlineKeyboardButton(
+            text=tr("shopping.btn_cancel"), callback_data=AssignAnswer(action="cancel").pack()
+        )
+        for assignment in pending.assignments:
+            if assignment.label in pending.labels:
+                continue
+            label = await service.find_label(assignment.label)
+            if label is not None:
+                pending.labels[assignment.label] = label
+                continue
+            pending.asking = ("label", assignment.label)
+            shown = label_text(assignment.label, None, ui.label_icons)
+            rows = [
+                [
+                    InlineKeyboardButton(
+                        text=tr("assign.btn_label_new", label=shown),
+                        callback_data=AssignAnswer(action="label_new").pack(),
+                        style=STYLE_DONE,
+                    )
+                ]
+            ]
+            similar = (await service.labels()).similar(assignment.label)
+            if similar is not None:
+                rows.append(
+                    [
+                        InlineKeyboardButton(
+                            text=tr(
+                                "assign.btn_label_use",
+                                label=label_dict_text(similar, tr, ui.label_icons),
+                            ),
+                            callback_data=AssignAnswer(
+                                action="label_use", arg=str(similar["id"])
+                            ).pack(),
+                        )
+                    ]
+                )
+            rows.append([cancel])
+            return tr("assign.ask_label", label=escape(shown)), InlineKeyboardMarkup(
+                inline_keyboard=rows
+            )
+        for assignment in pending.assignments:
+            for name in assignment.names:
+                if name in pending.foods:
+                    continue
+                food = await service.find_food(name)
+                if food is not None:
+                    pending.foods[name] = food
+                    continue
+                similar = (await service.foods()).similar(name)
+                if similar is None:
+                    pending.foods[name] = None
+                    continue
+                pending.asking = ("food", name)
+                similar_name = str(similar.get("name") or "?")
+                rows = [
+                    [
+                        InlineKeyboardButton(
+                            text=tr("assign.btn_food_use", food=similar_name),
+                            callback_data=AssignAnswer(
+                                action="food_use", arg=str(similar["id"])
+                            ).pack(),
+                            style=STYLE_DONE,
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text=tr("assign.btn_food_new", name=name),
+                            callback_data=AssignAnswer(action="food_new").pack(),
+                        )
+                    ],
+                    [cancel],
+                ]
+                return tr(
+                    "assign.ask_food", name=escape(name), food=escape(similar_name)
+                ), InlineKeyboardMarkup(inline_keyboard=rows)
+        pending.asking = None
+        return None, empty
+
+    async def run_assignment(
+        message: Message, pending: PendingAssignment, tr: Translator, actor: Message | CallbackQuery
+    ) -> None:
+        """Everything is resolved: write it to Mealie and show the list."""
+        result = AssignResult()
+        try:
+            for assignment in pending.assignments:
+                label = pending.labels[assignment.label]
+                result.extend(
+                    await service.assign(pending.list_id, assignment.names, label, pending.foods)
+                )
+        except MealieError as exc:
+            await send_error(message, tr, exc)
+            return
+        if message.bot is not None and ui.delete_item_messages:
+            with suppress(*_TELEGRAM_ERRORS):
+                await message.bot.delete_message(message.chat.id, pending.user_message_id)
+        ui.record(
+            message.chat.id,
+            "sorted",
+            actor,
+            [
+                f"{name} → {label_dict_text(label, tr, ui.label_icons)}"
+                for name, label in result.assigned
+            ],
+        )
+        state = ListState(
+            list_id=pending.list_id,
+            expanded={str(label["id"]) for _, label in result.assigned},
+            sorted_into=result.assigned,
+            undo=result if result.undoable else None,
+        )
+        try:
+            await ui.show(message, tr, state)
+        except _SHOW_ERRORS as exc:
+            await send_error(message, tr, exc)
+            return
+        await ui.sync_others(message.bot, message.chat.id)
+
+    @router.callback_query(AssignAnswer.filter())
+    async def on_assign_answer(
+        query: CallbackQuery, callback_data: AssignAnswer, tr: Translator
+    ) -> None:
+        message = query.message
+        if not isinstance(message, Message) or (
+            callback_data.arg and not valid_id(callback_data.arg)
+        ):
+            await query.answer()
+            return
+        async with ui.locked(message.chat.id) as chat:
+            pending = chat.questions.pop(message.message_id, None)
+            if pending is None or pending.asking is None:
+                # Answered already, or asked before a restart.
+                await query.answer(tr("assign.stale"))
+                with suppress(*_TELEGRAM_ERRORS):
+                    await message.delete()
+                return
+            await query.answer()
+            kind, name = pending.asking
+            answered = name in (pending.labels if kind == "label" else pending.foods)
+            try:
+                if callback_data.action == "cancel":
+                    with suppress(*_TELEGRAM_ERRORS):
+                        await message.delete()
+                    return
+                if answered:
+                    # Decided already; the next lookup failed last time (Mealie down).
+                    pass
+                elif kind == "label" and callback_data.action == "label_new":
+                    pending.labels[name] = await service.create_label(name, ui.label_emoji)
+                    ui.record(
+                        message.chat.id,
+                        "label",
+                        query,
+                        [label_dict_text(pending.labels[name], tr, ui.label_icons)],
+                    )
+                elif kind == "label" and callback_data.action == "label_use":
+                    label = next(
+                        (
+                            candidate
+                            for candidate in (await service.labels()).labels
+                            if str(candidate["id"]) == callback_data.arg
+                        ),
+                        None,
+                    )
+                    if label is None:
+                        await message.answer(tr("assign.stale"))
+                        return
+                    pending.labels[name] = label
+                elif kind == "food" and callback_data.action == "food_new":
+                    pending.foods[name] = None
+                elif kind == "food" and callback_data.action == "food_use":
+                    food = next(
+                        (
+                            candidate
+                            for candidate in (await service.foods()).foods
+                            if str(candidate["id"]) == callback_data.arg
+                        ),
+                        None,
+                    )
+                    if food is None:
+                        await message.answer(tr("assign.stale"))
+                        return
+                    pending.foods[name] = food
+                else:
+                    chat.questions[message.message_id] = pending
+                    return
+            except MealieError as exc:
+                chat.questions[message.message_id] = pending
+                await toast_error(query, tr, exc)
+                return
+            await advance_assignment(message, message, pending, tr, query)
 
     async def add_items_locked(message: Message, tr: Translator) -> None:
         try:
@@ -507,12 +864,16 @@ def build_router(context: FeatureContext) -> Router:
                 else:
                     # Keep the undo data until Mealie confirmed, so a failed
                     # attempt (Mealie down) can be repeated.
-                    created_ids = [item["id"] for item in state.undo.created]
-                    count = await service.undo_add(created_ids, state.undo.previous)
+                    if isinstance(state.undo, AddResult):
+                        created_ids = [item["id"] for item in state.undo.created]
+                        count = await service.undo_add(created_ids, state.undo.previous)
+                    else:
+                        count = await service.undo_assign(state.undo)
                     ui.record(message.chat.id, "undone", query, [], count)
                     await query.answer(tr("shopping.toast_undone", count=count))
                 state.undo = None
                 state.added = []
+                state.sorted_into = []
             elif action == "clear":
                 list_id = await ui.list_id(message.chat.id, state)
                 removed = await service.clear_checked(list_id)

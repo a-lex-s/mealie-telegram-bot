@@ -142,3 +142,32 @@ class MealieClient:
     async def get_units(self) -> list[JSON]:
         data = await self._request_json("GET", "/api/units", params={"perPage": -1})
         return list(data.get("items", []))
+
+    async def create_food(self, name: str, label_id: str | None = None) -> JSON:
+        payload: JSON = {"name": name}
+        if label_id:
+            payload["labelId"] = label_id
+        return await self._request_json("POST", "/api/foods", json=payload)
+
+    async def update_food(self, food_id: str, food: JSON) -> JSON:
+        """PUT replaces the whole food, so pass the complete current food."""
+        return await self._request_json("PUT", f"/api/foods/{food_id}", json=food)
+
+    async def delete_food(self, food_id: str) -> None:
+        await self._request("DELETE", f"/api/foods/{food_id}")
+
+    # --- labels (shopping list categories) --------------------------------
+
+    async def get_labels(self) -> list[JSON]:
+        data = await self._request_json(
+            "GET",
+            "/api/groups/labels",
+            params={"perPage": -1, "orderBy": "name", "orderDirection": "asc"},
+        )
+        return list(data.get("items", []))
+
+    async def create_label(self, name: str, color: str | None = None) -> JSON:
+        payload: JSON = {"name": name}
+        if color:
+            payload["color"] = color
+        return await self._request_json("POST", "/api/groups/labels", json=payload)

@@ -4,10 +4,15 @@ from mealie_bot.features.shopping.parser import (
     MAX_ENTRIES,
     MAX_ENTRY_LENGTH,
     MAX_QUANTITY,
+    Assignment,
     EntryTooLong,
+    InvalidAssignment,
+    LabelTooLong,
     ParsedEntry,
     TooManyEntries,
     clean_text,
+    has_arrow,
+    parse_assignments,
     parse_entry,
     parse_message,
     parse_quantity,
@@ -123,3 +128,32 @@ def test_numbered_lists_lose_their_numbering():
         "1,5 l Wasser",
         "1.5 l Saft",
     ]
+
+
+# --- "items → category" -----------------------------------------------------
+
+
+def test_parse_assignments_with_every_arrow_and_several_products():
+    text = "Ketchup → Würzmittel\n2 Senf, Mayo -> 🧂 Soßen\nSpülmittel>Haushalt\nTee => Getränke"
+    assert parse_assignments(text, UNITS) == [
+        Assignment(("Ketchup",), "Würzmittel"),
+        Assignment(("Senf", "Mayo"), "🧂 Soßen"),
+        Assignment(("Spülmittel",), "Haushalt"),
+        Assignment(("Tee",), "Getränke"),
+    ]
+    assert has_arrow("Brot > 500") and not has_arrow("2 l Milch")
+
+
+@pytest.mark.parametrize("text", ["Ketchup →", "→ Würzmittel", "a > b > c", "Milch\nKetchup -> X"])
+def test_parse_assignments_rejects_unreadable_lines(text):
+    with pytest.raises(InvalidAssignment):
+        parse_assignments(text, UNITS)
+
+
+def test_parse_assignments_limits():
+    with pytest.raises(LabelTooLong):
+        parse_assignments("Ketchup → " + "x" * 41, UNITS)
+    with pytest.raises(TooManyEntries):
+        parse_assignments(", ".join(["a"] * 51) + " → b", UNITS)
+    with pytest.raises(TooManyEntries):  # counted over all lines
+        parse_assignments("\n".join([", ".join(["a"] * 26) + " → b"] * 2), UNITS)

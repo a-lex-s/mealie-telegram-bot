@@ -49,9 +49,25 @@ The one picked with `/lists`, otherwise `SHOPPING_LIST`, otherwise the first
 list by name. The choice made with `/lists` resets when the bot restarts.
 
 **Does the bot create foods, units or lists in Mealie?**
-No. Unknown foods are stored as a note on the item; an unknown unit goes into
-the note while the food (and its category) is still matched; lists must exist
-in Mealie. A food created in Mealie is picked up within a minute.
+When adding items: no. Unknown foods are stored as a note on the item; an
+unknown unit goes into the note while the food (and its category) is still
+matched; lists must exist in Mealie. A food created in Mealie is picked up
+within a minute. Sorting a product into a category (`Ketchup → Condiments`)
+does create the food, and `/category` or the question after an unknown
+category creates a label. The bot never creates units or lists.
+
+**Everything lands in "Other". How do I get categories?**
+Categories are Mealie labels on foods. Send `Ketchup → Condiments` (or `->`,
+`>`; several products with commas) and the product keeps that category for
+good. `/categories` shows what exists and how many products have no category.
+
+**My own categories show only a coloured circle or 📦.**
+The emoji comes from a built-in keyword table (German and English), from
+`LABEL_EMOJI`, or from an emoji at the start of the label name in Mealie.
+Without a match the label's colour from Mealie stands in as a circle
+(`🟢 Eigenes`); give the label a colour in Mealie and the circle appears.
+Only a label with neither colour nor emoji gets 📦. `LABEL_ICONS` switches circles
+or emojis off (see [configuration.md](configuration.md)).
 
 **Changes made in Mealie do not show up in Telegram.**
 Tap *Refresh* (or any button) or send `/list` again. Changes made through the
@@ -59,8 +75,8 @@ bot by the other person do show up: their change re-renders your list message
 in place. There are no push notifications in version 1.
 
 **Where did my `/list` message go?**
-The bot deletes `/list`, `/lists` and `/clear` right away so that only the
-list stays in the chat (`/start` and `/help` stay). Set `DELETE_COMMANDS=false`
+The bot deletes `/list`, `/lists`, `/clear`, `/category` and `/categories`
+right away so that only the list stays in the chat (`/start` and `/help` stay). Set `DELETE_COMMANDS=false`
 to keep them.
 
 **I cleared the chat history and the list is gone.**

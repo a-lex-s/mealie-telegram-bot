@@ -1,9 +1,13 @@
 import json
 
+import httpx
 import pytest
 
 from mealie_bot.features.shopping.parser import ParsedEntry
 from mealie_bot.features.shopping.service import (
+    AssignResult,
+    FoodIndex,
+    LabelIndex,
     NoShoppingListError,
     ShoppingService,
     UnitResolver,
@@ -229,3 +233,160 @@ async def test_view_reads_the_label_order(service, mealie_mock):
     )
     view = await service.view(LIST_ID)
     assert view.label_order == {"l-2": 1, "l-1": 0}
+
+
+# --- categories ---------------------------------------------------------------
+
+LABELS = [
+    {"id": "lab-1", "name": "Würzmittel", "color": "#9b7bb8", "groupId": "g"},
+    {"id": "lab-2", "name": "🧴 Drogerie", "color": "#959595", "groupId": "g"},
+]
+
+
+def test_label_index_finds_with_and_without_emoji_and_similar_names():
+    index = LabelIndex(LABELS)
+    assert index.find("würzmittel")["id"] == "lab-1"
+    assert index.find("Drogerie")["id"] == "lab-2"
+    assert index.find("🧴 Drogerie")["id"] == "lab-2"
+    assert index.find("🧴Drogerie")["id"] == "lab-2"
+    assert index.find("Haushalt") is None
+    assert index.similar("Würzmitel")["id"] == "lab-1"
+    assert index.similar("Haushalt") is None
+    assert [label["id"] for label in index.labels] == ["lab-2", "lab-1"]  # by name
+
+
+def test_food_index_similar():
+    index = FoodIndex([make_food("f-1", "Ketchup"), make_food("f-2", "Milch")])
+    assert index.similar("Ketchap")["id"] == "f-1"
+    assert index.similar("Eier") is None
+
+
+async def test_create_label_uses_the_emoji_colour_and_refreshes_the_cache(service, mealie_mock):
+    labels = mealie_mock.get("/api/groups/labels").respond(json={"items": LABELS})
+    post = mealie_mock.post("/api/groups/labels").respond(
+        201, json={"id": "lab-3", "name": "Obst", "color": "#d9534f", "groupId": "g"}
+    )
+    assert await service.find_label("Obst") is None
+    label = await service.create_label("Obst")
+    assert json.loads(post.calls.last.request.content) == {"name": "Obst", "color": "#d9534f"}
+    await service.create_label("Obst", {"obst": "🥛"})  # LABEL_EMOJI overrides count
+    assert json.loads(post.calls.last.request.content)["color"] == "#5bc0de"
+    assert label["id"] == "lab-3"
+    labels.respond(json={"items": [*LABELS, label]})
+    assert (await service.find_label("obst"))["id"] == "lab-3"
+    assert labels.call_count == 2
+
+
+async def test_assign_creates_foods_relabels_foods_and_updates_items(service, mealie_mock):
+    mealie_mock.get("/api/units").respond(json={"items": UNITS})
+    senf = make_food("f-senf", "Senf", "lab-old", aliases=["mustard"])
+    senf["substitutions"] = [{"substituteFood": {"id": "f-dijon", "name": "Dijon"}, "note": "x"}]
+    senf["label"] = {"id": "lab-old", "name": "Old"}
+    foods = mealie_mock.get("/api/foods").respond(json={"items": [senf]})
+    senf_item = make_item("i-1", "Senf", foodId="f-senf", labelId="lab-old", food={"id": "f-senf"})
+    note_item = make_item("i-2", "ketchup", note="ketchup")
+    other = make_item("i-3", "Milch", note="Milch")
+    mealie_mock.get(f"/api/households/shopping/lists/{LIST_ID}").respond(
+        json={"id": LIST_ID, "name": "Groceries", "listItems": [senf_item, note_item, other]}
+    )
+    create = mealie_mock.post("/api/foods").respond(
+        201, json={"id": "f-ketchup", "name": "Ketchup", "labelId": "lab-1"}
+    )
+    put_food = mealie_mock.put("/api/foods/f-senf").respond(
+        json={**make_food("f-senf", "Senf", "lab-1")}
+    )
+    put_items = mealie_mock.put(url__regex=r"/api/households/shopping/items/.*").respond(json={})
+
+    result = await service.assign(LIST_ID, ["Ketchup", "mustard"], LABELS[0], {})
+
+    assert json.loads(create.calls.last.request.content) == {"name": "Ketchup", "labelId": "lab-1"}
+    food_body = json.loads(put_food.calls.last.request.content)
+    assert food_body["labelId"] == "lab-1" and food_body["aliases"] == [{"name": "mustard"}]
+    assert "label" not in food_body  # only the fields PUT accepts
+    # Substitutions are kept, in the shape PUT accepts.
+    assert food_body["substitutions"] == [{"substituteFoodId": "f-dijon", "note": "x"}]
+    bodies = {
+        call.request.url.path.rsplit("/", 1)[1]: json.loads(call.request.content)
+        for call in put_items.calls
+    }
+    assert set(bodies) == {"i-1", "i-2"}  # the unrelated note item is untouched
+    assert bodies["i-2"]["foodId"] == "f-ketchup" and bodies["i-2"]["labelId"] == "lab-1"
+    assert bodies["i-2"]["note"] == "" and "display" not in bodies["i-2"]
+    assert bodies["i-1"]["labelId"] == "lab-1" and bodies["i-1"]["foodId"] == "f-senf"
+    assert [name for name, _ in result.assigned] == ["Ketchup", "Senf"]
+    assert result.created_food_ids == ["f-ketchup"]
+    assert [food["id"] for food in result.previous_foods] == ["f-senf"]
+    assert [item["id"] for item in result.previous_items] == ["i-2", "i-1"]
+    assert result.undoable
+    # The food cache is dropped so the new food is found right away.
+    assert foods.call_count == 1
+    await service.foods()
+    assert foods.call_count == 2
+
+
+async def test_assign_with_a_chosen_food_skips_the_lookup(service, mealie_mock):
+    mealie_mock.get("/api/foods").respond(json={"items": []})
+    mealie_mock.get(f"/api/households/shopping/lists/{LIST_ID}").respond(
+        json={"id": LIST_ID, "name": "Groceries", "listItems": []}
+    )
+    chosen = make_food("f-k", "Ketchup", "lab-1")
+    create = mealie_mock.post("/api/foods")
+    result = await service.assign(LIST_ID, ["Ketchap"], LABELS[0], {"Ketchap": chosen})
+    assert not create.called  # already in the label: nothing to write
+    assert result.assigned == [("Ketchup", LABELS[0])] and not result.undoable
+
+
+async def test_undo_assign_restores_items_and_foods_then_deletes_created(service, mealie_mock):
+    calls = []
+    for method, pattern in (
+        ("PUT", r"/api/households/shopping/items/.*"),
+        ("PUT", r"/api/foods/.*"),
+        ("DELETE", r"/api/foods/.*"),
+    ):
+        mealie_mock.route(method=method, url__regex=pattern).mock(
+            side_effect=lambda request: (
+                (calls.append((request.method, request.url.path)), 200)
+                and httpx.Response(200, json={})
+            )
+        )
+    result = AssignResult(
+        assigned=[("Ketchup", LABELS[0]), ("Senf", LABELS[0])],
+        created_food_ids=["f-ketchup"],
+        previous_foods=[make_food("f-senf", "Senf", "lab-old")],
+        previous_items=[make_item("i-2", "Ketchup", note="Ketchup", label=None)],
+    )
+    assert await service.undo_assign(result) == 2
+    assert calls == [
+        ("PUT", "/api/households/shopping/items/i-2"),
+        ("PUT", "/api/foods/f-senf"),
+        ("DELETE", "/api/foods/f-ketchup"),
+    ]
+
+
+async def test_label_counts(service, mealie_mock):
+    mealie_mock.get("/api/groups/labels").respond(json={"items": LABELS})
+    mealie_mock.get("/api/foods").respond(
+        json={
+            "items": [
+                make_food("f-1", "Senf", "lab-1"),
+                make_food("f-2", "Ketchup", "lab-1"),
+                make_food("f-3", "Milch"),
+            ]
+        }
+    )
+    mealie_mock.get(f"/api/households/shopping/lists/{LIST_ID}").respond(
+        json={
+            "id": LIST_ID,
+            "name": "Groceries",
+            "listItems": [
+                make_item("i-1", "Milch"),
+                make_item("i-2", "Senf", label="Würzmittel"),
+                make_item("i-3", "Seife", checked=True),
+            ],
+        }
+    )
+    counts = await service.label_counts(LIST_ID)
+    assert [label["id"] for label in counts.labels] == ["lab-2", "lab-1"]
+    assert counts.foods_per_label == {"lab-1": 2}
+    assert counts.foods_without_label == 1
+    assert counts.items_without_label == 1  # ticked-off items do not count

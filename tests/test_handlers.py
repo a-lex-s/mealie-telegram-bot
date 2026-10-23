@@ -23,6 +23,7 @@ from mealie_bot.features.shopping.render import (
     NO_LABEL,
     VIEW_DONE,
     VIEW_OPEN,
+    AssignAnswer,
     ItemAction,
     ListAction,
     SelectList,
@@ -888,3 +889,236 @@ async def test_list_choice_is_per_chat(harness, mealie_mock):
     assert "<b>Z</b>" in session.last(EditMessageText).text
     await feed(message("/list", user_id=BOB))
     assert "<b>Groceries</b>" in session.last(SendMessage).text
+
+
+# --- categories -------------------------------------------------------------
+
+LABEL = {"id": "lab-1", "name": "Würzmittel", "color": "#9b7bb8", "groupId": "g"}
+
+
+def mock_categories(mealie_mock, labels=(LABEL,), foods=()):
+    mealie_mock.get("/api/groups/labels").respond(json={"items": list(labels)})
+    mealie_mock.get("/api/foods").respond(json={"items": list(foods)})
+
+
+async def test_arrow_sorts_a_known_product_without_questions(harness, mealie_mock):
+    feed, session = harness
+    ketchup = {"id": "f-k", "name": "Ketchup", "labelId": None, "aliases": []}
+    mock_categories(mealie_mock, foods=[ketchup])
+    item = make_item("i-1", "Ketchup", foodId="f-k", food=ketchup)
+    mock_list(mealie_mock, item)
+    put_food = mealie_mock.put("/api/foods/f-k").respond(json={**ketchup, "labelId": "lab-1"})
+    put_item = mealie_mock.put("/api/households/shopping/items/i-1").respond(json={})
+    await feed(message("Ketchup → Würzmittel", language="de"))
+    assert json.loads(put_food.calls.last.request.content)["labelId"] == "lab-1"
+    assert json.loads(put_item.calls.last.request.content)["labelId"] == "lab-1"
+    reply = session.last(SendMessage)
+    assert "🏷️ <b>Einsortiert:</b> <b>Ketchup</b> · <i>🟣 🧂 Würzmittel</i>" in reply.text
+    assert reply.reply_markup.inline_keyboard[-1][0].text == "↩️ Rückgängig"
+    deleted = session.last(DeleteMessage)
+    assert (deleted.chat_id, deleted.message_id) == (ALICE, 1)
+    assert not session.sent(AnswerCallbackQuery)
+
+
+async def test_arrow_asks_before_creating_a_category_and_a_food(harness, mealie_mock):
+    feed, session = harness
+    mock_categories(mealie_mock, foods=[{"id": "f-k", "name": "Ketchup", "aliases": []}])
+    mock_list(mealie_mock, make_item("i-1", "Ketchap", note="Ketchap"))
+    create_label = mealie_mock.post("/api/groups/labels").respond(
+        201, json={"id": "lab-2", "name": "Haushalt", "color": "#5d8aa8", "groupId": "g"}
+    )
+    create_food = mealie_mock.post("/api/foods")
+    put_item = mealie_mock.put("/api/households/shopping/items/i-1").respond(json={})
+    put_food = mealie_mock.put("/api/foods/f-k").respond(json={})
+
+    await feed(message("Ketchap -> Haushalt", language="de"))
+    question = session.last(SendMessage)
+    assert question.text == "❓ Die Kategorie <b>🧻 Haushalt</b> gibt es noch nicht."
+    assert buttons(question) == ["➕ 🧻 Haushalt anlegen", "✕ Abbrechen"]
+    question_id = session.next_id
+    assert not create_label.called
+
+    await feed(callback(AssignAnswer(action="label_new").pack(), message_id=question_id))
+    assert json.loads(create_label.calls.last.request.content) == {
+        "name": "Haushalt",
+        "color": "#5d8aa8",
+    }
+    edited = session.last(EditMessageText)
+    assert edited.message_id == question_id
+    assert edited.text == "❓ <b>Ketchap</b> kenne ich nicht. Meinst du <b>Ketchup</b>?"
+    assert buttons(edited) == ["Ja, Ketchup", "➕ Nein, Ketchap anlegen", "✕ Abbrechen"]
+
+    await feed(callback(AssignAnswer(action="food_use", arg="f-k").pack(), message_id=question_id))
+    assert not create_food.called
+    assert json.loads(put_food.calls.last.request.content)["labelId"] == "lab-2"
+    assert put_item.calls.last.request.url.path.endswith("i-1")
+    # The question and the user's line are gone, the list shows the result.
+    deleted = [(d.chat_id, d.message_id) for d in session.sent(DeleteMessage)]
+    assert (ALICE, question_id) in deleted and (ALICE, 1) in deleted
+    assert (
+        "<b>Einsortiert:</b> <b>Ketchup</b> · <i>🔵 🧻 Haushalt</i>"
+        in session.last(SendMessage).text
+    )
+
+
+async def test_arrow_offers_the_similar_category_and_creates_an_unknown_food(harness, mealie_mock):
+    feed, session = harness
+    mock_categories(mealie_mock)
+    mock_list(mealie_mock)
+    create_food = mealie_mock.post("/api/foods").respond(
+        201, json={"id": "f-new", "name": "Sojasoße", "labelId": "lab-1"}
+    )
+    await feed(message("Sojasoße → Würzmitel"))
+    question = session.last(SendMessage)
+    assert buttons(question) == ["➕ Create 🧂 Würzmitel", "Use 🟣 🧂 Würzmittel", "✕ Cancel"]
+    await feed(
+        callback(AssignAnswer(action="label_use", arg="lab-1").pack(), message_id=session.next_id)
+    )
+    assert json.loads(create_food.calls.last.request.content) == {
+        "name": "Sojasoße",
+        "labelId": "lab-1",
+    }
+    assert "<b>Sojasoße</b> · <i>🟣 🧂 Würzmittel</i>" in session.last(SendMessage).text
+
+
+async def test_arrow_question_can_be_cancelled_and_is_stale_afterwards(harness, mealie_mock):
+    feed, session = harness
+    mock_categories(mealie_mock)
+    mock_list(mealie_mock)
+    create = mealie_mock.post("/api/groups/labels")
+    await feed(message("Seife → Drogerie"))
+    question_id = session.next_id
+    await feed(callback(AssignAnswer(action="cancel").pack(), message_id=question_id))
+    deleted = session.last(DeleteMessage)
+    assert deleted.message_id == question_id
+    assert not create.called
+    await feed(callback(AssignAnswer(action="label_new").pack(), message_id=question_id))
+    assert "nicht mehr offen" in session.last(AnswerCallbackQuery).text
+
+
+async def test_unanswered_question_is_dropped_when_the_list_is_shown(harness, mealie_mock):
+    feed, session = harness
+    mock_categories(mealie_mock)
+    mock_list(mealie_mock)
+    await feed(message("Seife → Drogerie"))
+    question_id = session.next_id
+    await feed(message("/list"))
+    assert question_id in [d.message_id for d in session.sent(DeleteMessage)]
+    await feed(callback(AssignAnswer(action="label_new").pack(), message_id=question_id))
+    assert "nicht mehr offen" in session.last(AnswerCallbackQuery).text
+
+
+async def test_answer_survives_a_mealie_outage_during_the_next_lookup(harness, mealie_mock):
+    feed, session = harness
+    mock_categories(mealie_mock)
+    mock_list(mealie_mock)
+    create_label = mealie_mock.post("/api/groups/labels").respond(
+        201, json={"id": "lab-2", "name": "Drogerie", "color": "#d58cc0", "groupId": "g"}
+    )
+    await feed(message("Seife → Drogerie"))
+    question_id = session.next_id
+    # The label is created, then the food lookup fails: the question stays answerable.
+    foods = mealie_mock.get("/api/foods").mock(side_effect=httpx.ConnectError("down"))
+    await feed(callback(AssignAnswer(action="label_new").pack(), message_id=question_id))
+    assert create_label.call_count == 1
+    assert "Mealie" in session.last(SendMessage).text
+    foods.respond(json={"items": []})
+    mealie_mock.post("/api/foods").respond(201, json={"id": "f-s", "name": "Seife"})
+    await feed(callback(AssignAnswer(action="label_new").pack(), message_id=question_id))
+    assert create_label.call_count == 1  # the label is not created twice
+    assert "<b>Seife</b>" in session.last(SendMessage).text
+
+
+async def test_undo_reverts_a_sorting(harness, mealie_mock):
+    feed, session = harness
+    mock_categories(mealie_mock)
+    mock_list(mealie_mock)
+    mealie_mock.post("/api/foods").respond(201, json={"id": "f-new", "name": "Senf"})
+    await feed(message("Senf → Würzmittel", language="de"))
+    list_message_id = session.next_id
+    delete = mealie_mock.delete("/api/foods/f-new").respond(204)
+    await feed(callback(ListAction(action="undo").pack(), message_id=list_message_id))
+    assert delete.called
+    assert "1 Eintrag rückgängig" in session.last(AnswerCallbackQuery).text
+    edited = session.last(EditMessageText)
+    assert "Einsortiert" not in edited.text
+    assert edited.reply_markup.inline_keyboard[-1][0].text == "🔄 Aktualisieren"
+
+
+async def test_unreadable_arrow_line_is_explained_and_kept(harness, mealie_mock):
+    feed, session = harness
+    await feed(message("Ketchup →"))
+    assert "could not read" in session.last(SendMessage).text
+    assert not session.sent(DeleteMessage)
+
+
+async def test_category_command_creates_and_reports_existing(harness, mealie_mock):
+    feed, session = harness
+    mock_categories(mealie_mock)
+    mock_list(mealie_mock)
+    create = mealie_mock.post("/api/groups/labels").respond(
+        201, json={"id": "lab-3", "name": "🧴 Drogerie", "color": "#d58cc0", "groupId": "g"}
+    )
+    await feed(message("/kategorie 🧴 Dro\u200bgerie", language="de"))  # invisible char dropped
+    assert json.loads(create.calls.last.request.content) == {
+        "name": "🧴 Drogerie",
+        "color": "#d58cc0",
+    }
+    reply = session.last(SendMessage)
+    assert "🏷️ <b>Neue Kategorie:</b> 🟣 🧴 Drogerie" in reply.text
+    assert session.last(DeleteMessage).message_id == 1  # the command is tidied away
+
+    await feed(message("/category würzmittel"))
+    assert session.last(SendMessage).text == (
+        "🏷️ The category <b>🟣 🧂 Würzmittel</b> already exists."
+    )
+    await feed(message("/category"))
+    assert "/category Household" in session.last(SendMessage).text
+    usage_id = session.next_id
+    await feed(message("/category " + "x" * 41))
+    assert "at most 40" in session.last(SendMessage).text
+    # Those replies are tidied away the next time the list is shown.
+    await feed(message("/list"))
+    assert usage_id in [d.message_id for d in session.sent(DeleteMessage)]
+
+
+async def test_categories_command_lists_counts_and_is_tidied_later(harness, mealie_mock):
+    feed, session = harness
+    mock_categories(
+        mealie_mock,
+        labels=[LABEL, {"id": "lab-2", "name": "Eigenes", "color": "#5cb85c", "groupId": "g"}],
+        foods=[{"id": "f-1", "name": "Senf", "labelId": "lab-1"}, {"id": "f-2", "name": "Milch"}],
+    )
+    mock_list(mealie_mock, make_item("i-1", "Milch", note="Milch"))
+    await feed(message("/kategorien", language="de"))
+    info = session.last(SendMessage)
+    assert info.text == (
+        "🏷️ <b>Kategorien</b> (2)\n"
+        "🟢 Eigenes · 0\n"
+        "🟣 🧂 Würzmittel · 1\n"
+        "📦 Ohne Kategorie: 1 Produkte, 1 offen auf dieser Liste"
+    )
+    info_id = session.next_id
+    await feed(message("/liste", language="de"))
+    assert info_id in [d.message_id for d in session.sent(DeleteMessage)]
+
+
+async def test_sorting_is_recorded_in_the_history(harness, mealie_mock):
+    feed, session = harness
+    mock_categories(mealie_mock)
+    mock_list(mealie_mock)
+    mealie_mock.post("/api/foods").respond(201, json={"id": "f-new", "name": "Senf"})
+    await feed(message("/list"))
+    await feed(message("Senf → Würzmittel"))
+    history = [e for e in session.sent(EditMessageText) if "📜" in (e.text or "")]
+    assert history and "🏷️ Senf → 🟣 🧂 Würzmittel" in history[-1].text
+
+
+@pytest.mark.parametrize("harness", [{"label_icons": "none"}], indirect=True)
+async def test_label_icons_none_shows_plain_category_names(harness, mealie_mock):
+    feed, session = harness
+    soap = make_item("i-1", "Soap", label="Eigenes")
+    soap["label"]["color"] = "#5cb85c"
+    mock_list(mealie_mock, soap, make_item("i-2", "Milk"))
+    await feed(message("/list"))
+    assert buttons(session.last(SendMessage))[:2] == ["Eigenes (1) ▸", "Other (1) ▸"]

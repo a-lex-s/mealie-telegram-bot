@@ -53,9 +53,10 @@ bot at start-up with exit code 2 and a message that never contains secret values
 | `BOT_LANGUAGE` | no | per user | Force one language (`en`, `de`) for everybody |
 | `SHOPPING_LIST` | no | first list | Default shopping list, by name (case-insensitive) or ID |
 | `FEATURE_SHOPPING` | no | `true` | Enable the shopping list feature |
-| `DELETE_COMMANDS` | no | `true` | Delete the user's `/list`, `/lists` and `/clear` messages once handled, so only the list stays in the chat |
+| `DELETE_COMMANDS` | no | `true` | Delete the user's `/list`, `/lists`, `/clear`, `/category` and `/categories` messages once handled, so only the list stays in the chat |
 | `DELETE_ITEM_MESSAGES` | no | `true` | Delete the user's item messages once the items were added; the history entry records them |
-| `LABEL_EMOJI` | no | keyword table | Emoji per Mealie label name, `Name=🌶️;Other=🐾`; overrides the built-in keyword table (6.4) |
+| `LABEL_EMOJI` | no | keyword table | Emoji per Mealie label name, `Name=🌶️;Other=🐾`; overrides an emoji in the label name and the built-in keyword table (6.4) |
+| `LABEL_ICONS` | no | `both` | What is shown in front of category names: `both`, `color`, `emoji` or `none` (6.4) |
 | `MEALIE_TIMEOUT` | no | `10` | HTTP timeout for Mealie requests in seconds |
 | `TZ` | no | UTC | Time zone of the container; used for the "as of" time in list messages and history entries |
 | `LOG_LEVEL` | no | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR` |
@@ -104,14 +105,17 @@ Mealie as done by that user. Its household determines which lists are visible.
 | list | `/list` | `/liste` | Show the active list |
 | lists | `/lists` | `/listen` | Choose the active list |
 | clear | `/clear` | `/aufraeumen` | Delete all ticked-off items of the active list, after confirmation |
+| category | `/category` | `/kategorie` | Create a category (Mealie label), see 6.8 |
+| categories | `/categories` | `/kategorien` | Show all categories with their number of products, see 6.8 |
 
-The command menu lists the feature commands first (`/list`, `/clear`, `/lists`)
-and `/help` last. It, the bot description and the short description ("What can this
+The command menu lists the feature commands first (`/list`, `/clear`, `/lists`,
+`/category`, `/categories`) and `/help` last. It, the bot description and the short description ("What can this
 bot do?") are published per language at start-up (`setMyCommands`,
 `setMyDescription`, `setMyShortDescription`).
 
 With `DELETE_COMMANDS=true` (default) the bot deletes the user's `/list`,
-`/lists` and `/clear` messages before it shows the list, so the chat holds
+`/lists`, `/clear`, `/category` and `/categories` messages before it shows the
+list, so the chat holds
 the list and the history instead of a trail of commands. `/start` and `/help`
 are never deleted.
 
@@ -178,8 +182,9 @@ Matching against Mealie (per entry):
    item's `note` and the food is still matched (`2 Netz Tomaten` → food
    *Tomaten*, note `Netz`, quantity 2). Without a food match the whole text
    becomes the note (`Netz Tomaten`), so nothing typed is lost.
-4. Without a food match the text becomes the item's `note`. The bot never
-   creates foods or units in Mealie.
+4. Without a food match the text becomes the item's `note`. Adding items never
+   creates foods or units in Mealie; sorting a product into a category (6.8)
+   does create the food.
 
 All entries of one message are created in a single bulk request. Mealie itself
 merges a new item into an existing unchecked item with the same food/unit/note
@@ -244,12 +249,23 @@ is shown; taps and changes from the other chat edit it in place.
   ticked off, **Remove** and **Yes, remove** are red (`danger`). Clients that
   predate button styles show plain buttons. When everything is ticked off,
   **Remove (m)** joins the control row.
-* Each category gets an emoji from a keyword table in `mealie_bot/i18n/labels.py`
-  (German and English keywords, case-insensitive substring match on the label
-  name, first match wins; e.g. "Obst & Gemüse" and "Fruit" → 🍎, "Würzmittel"
-  and "Spices" → 🧂, "Drogerie" → 🧴). Labels without a match and items
-  without a label get 📦. `LABEL_EMOJI` maps exact label names to an emoji and
-  wins over the table. The same emoji appears in the "Added" quote.
+* Each category is shown as `colour circle · emoji · name`
+  (`🟣 🧂 Würzmittel`), the same in headers, the "Added" and "Sorted" quotes,
+  `/categories` and the history:
+  * The colour circle (🔴 🟠 🟡 🟢 🔵 🟣 🟤 ⚫ ⚪) is the nearest match for the
+    label's colour in Mealie. Mealie's default grey (`#959595`), other greys and
+    unreadable values give no circle.
+  * The emoji comes from `LABEL_EMOJI` (exact label name), else from an emoji
+    at the start of the label's own name in Mealie (`🧴 Drogerie`, shown once),
+    else from a keyword table in `mealie_bot/i18n/labels.py` (German and
+    English keywords, case-insensitive substring match, first match wins;
+    e.g. "Obst & Gemüse" and "Fruit" → 🍎, "Würzmittel" and "Spices" → 🧂).
+  * A label with a colour but no emoji match shows just its circle
+    (`🟢 Eigenes`), so own categories need no configuration. Only a label with
+    neither, and items without a label ("Other"), get 📦.
+  * `LABEL_ICONS` switches parts off: `both` (default) as above, `color` shows
+    only circles (`🟣 Würzmittel`, nothing without a colour), `emoji` only
+    emojis (`🧂 Würzmittel`, 📦 without a match), `none` just the name.
 * Items of an expanded category are buttons labelled `name · quantity`
   (`Mehl · 500 g`; quantity 1 without unit is omitted; texts longer than 40
   characters are cut with `…`). Rows are filled in list order: a row takes the
@@ -296,10 +312,11 @@ When the live list moves to the bottom of the chat, the previous list message
 is not simply deleted:
 
 * If anything changed since the last history entry (items added, ticked off,
-  put back, removed or undone), the old message is rewritten into a compact
-  history entry: `📜 <b>list</b>` followed by one line per change,
-  `<i>HH:MM · first name</i> ➕ items` (`✅` ticked off, `🔁` put back,
-  `🧹 n items removed`, `↩️ n items undone`). In a private chat the owner's own
+  put back, removed, undone, sorted into a category or a category created),
+  the old message is rewritten into a compact history entry: `📜 <b>list</b>`
+  followed by one line per change, `<i>HH:MM · first name</i> ➕ items` (`✅`
+  ticked off, `🔁` put back, `🧹 n items removed`, `↩️ n items undone`,
+  `🏷️ Ketchup → 🟣 🧂 Würzmittel`, `🏷️ new category 🔵 🧻 Haushalt`). In a private chat the owner's own
   name is left out (`<i>HH:MM</i> ➕ items`); the other person's name and every
   name in a group stay. Consecutive changes of the same kind by the same person
   are merged into one line; items are written as one would type them
@@ -337,6 +354,68 @@ A command no feature knows (`/foo`) gets "I do not know that command", and a
 message without text (photo, voice message, sticker) gets "I only understand
 text", each with a pointer to `/help`.
 
+### 6.8 Categories
+
+Categories are Mealie labels. A product's category is the label of its food
+in Mealie, so sorting works on the food and holds for every future purchase;
+items of the active list follow right away.
+
+**Sorting by text.** A line `products → category` sorts products:
+`Ketchup → Würzmittel`, `Senf, Mayo -> Würzmittel`, `Spülmittel > Haushalt`.
+The arrow may be `→`, `->`, `=>` or `>`; one category per line, several lines
+per message, at most 50 products in all, separated like entries (6.3); a
+quantity in front of a product is ignored. A message is treated as sorting as soon as it contains an
+arrow. A line without products, without a category or with two arrows is
+answered with an example and stays in the chat. A category name is at most
+40 characters long.
+
+For every line the bot resolves the category, then each product:
+
+1. The category is looked up among all labels, case-insensitively, with and
+   without a leading emoji (`Drogerie` finds `🧴 Drogerie`). If it does not
+   exist, the bot asks once: **➕ Create X**, **Use Y** when a label with a
+   similar name exists (difflib ratio ≥ 0.75, catches typos like `Würzmitel`),
+   and **✕ Cancel**. A created label gets a colour that matches its emoji
+   (`LABEL_COLORS` in `labels.py`), else Mealie's default.
+2. Each product is looked up among all foods (6.3). If it does not exist but a
+   food with a similar name does, the bot asks **Yes, Ketchup** / **➕ No,
+   create Ketchap** / **✕ Cancel**; without a similar food it is created
+   without asking. Questions are asked one after the other in a single bot
+   message that is edited for the next question and deleted at the end.
+   Cancel deletes the question and leaves the user's line in the chat. A
+   question nobody answered is deleted the next time the list is shown. A tap
+   on a question that is no longer open (answered already, dropped, or asked
+   before a restart) is answered with a toast and the question is deleted. If
+   Mealie fails after an answer, the answer is kept and the question can be
+   tapped again.
+3. Then Mealie is updated: a new food is created with the label (`POST
+   /api/foods`), an existing food gets the label (`PUT /api/foods/{id}`, the
+   whole food sent back with only `labelId` changed), items of the active
+   list that carry the food get the label, and items that carry the product
+   only as a note are linked to the food (`foodId`, `labelId`, empty `note`;
+   `display` is left out so Mealie recomputes it). Nothing is written for a
+   product that already is in that category.
+
+The user's line is deleted like an item message (`DELETE_ITEM_MESSAGES`), the
+list is shown again with the sorted products' categories expanded and a
+**Sorted** quote (`<b>Ketchup</b> · <i>🟣 🧂 Würzmittel</i>`), and the history
+records `🏷️ Ketchup → 🟣 🧂 Würzmittel`. **Undo** restores the items, puts
+the foods' previous labels back and deletes the foods the sorting created; a
+category created on the way stays (it is harmless in Mealie).
+
+**Commands.** `/category Name` creates a label (with its emoji in the name if
+typed, `/category 🧴 Drogerie`; invisible characters are dropped); if it
+exists, the bot says so. Without a name the bot shows the usage. These replies
+are deleted the next time the list is shown. `/categories` answers with one line per label
+(`🟣 🧂 Würzmittel · 12` = number of foods) sorted by name, and a last line
+with the number of foods without a label and of open items without a label on
+the active list; that message is deleted the next time the list is shown, like
+an error message. Labels and foods are cached like units and reloaded on a
+miss (6.3), on every `/categories` and after every change the bot makes.
+
+The bot never decides a category on its own: no keyword guessing and no AI, only
+the questions above.
+
 ## 7. Mealie API usage
 
 Verified against the OpenAPI document of Mealie v3.29.0. Authentication:
@@ -353,6 +432,11 @@ Verified against the OpenAPI document of Mealie v3.29.0. Authentication:
 | Delete ticked-off items, undo added items | `DELETE /api/households/shopping/items?ids=…&ids=…` |
 | Foods | `GET /api/foods?perPage=-1` |
 | Units | `GET /api/units?perPage=-1` |
+| Labels (categories) | `GET /api/groups/labels?perPage=-1&orderBy=name&orderDirection=asc` |
+| Create a label | `POST /api/groups/labels` (`MultiPurposeLabelCreate`: `name`, `color`) |
+| Create a food with its label | `POST /api/foods` (`CreateIngredientFood`: `name`, `labelId`) |
+| Change a food's label | `PUT /api/foods/{item_id}` (whole `CreateIngredientFood`, only `labelId` changed; substitutions sent back as `substituteFoodId`/`note`) |
+| Undo a created food | `DELETE /api/foods/{item_id}` |
 
 `PUT` replaces the whole item, so the bot reads the item first and sends back
 all fields of `ShoppingListItemUpdate` (`shoppingListId`, `quantity`, `note`,

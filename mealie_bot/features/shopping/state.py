@@ -11,8 +11,10 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from html import escape
 
+from mealie_bot.features.shopping.parser import Assignment
 from mealie_bot.features.shopping.render import VIEW_DONE, VIEW_OPEN, ListState
 from mealie_bot.i18n import Translator
+from mealie_bot.mealie.client import JSON
 
 # Changes closer together than this share one history message.
 HISTORY_WINDOW = timedelta(minutes=15)
@@ -22,8 +24,27 @@ MAX_HISTORY_ITEMS = 8
 
 
 @dataclass
+class PendingAssignment:
+    """An "items → category" message waiting for an answer to a question.
+
+    Labels and foods are resolved one after the other; each unknown name is
+    asked about once (create it, or take the similar one), then the
+    assignment runs.
+    """
+
+    list_id: str
+    user_message_id: int
+    assignments: list[Assignment]
+    # Resolved so far: typed label name -> label, typed product name -> food (None = create).
+    labels: dict[str, JSON] = field(default_factory=dict)
+    foods: dict[str, JSON | None] = field(default_factory=dict)
+    # What a pending question is about: ("label", name) or ("food", name).
+    asking: tuple[str, str] | None = None
+
+
+@dataclass
 class HistoryEvent:
-    kind: str  # "added" | "checked" | "unchecked" | "cleared" | "undone"
+    kind: str  # "added" | "checked" | "unchecked" | "cleared" | "undone" | "sorted" | "label"
     user: str
     at: datetime
     items: list[str] = field(default_factory=list)
@@ -58,8 +79,11 @@ class ChatState:
     pending: list[HistoryEvent] = field(default_factory=list)
     history_message_id: int | None = None
     history_events: list[HistoryEvent] = field(default_factory=list)
-    # Error messages the bot posted; deleted once the list is shown again.
-    error_message_ids: list[int] = field(default_factory=list)
+    # Error and info messages the bot posted; deleted once the list is shown again.
+    transient_message_ids: list[int] = field(default_factory=list)
+    # Questions asked for "items → category" messages, by the question's message id.
+    # Deleted together with the transient messages when the list is shown again.
+    questions: dict[int, PendingAssignment] = field(default_factory=dict)
     # Handlers for one chat run one after another (two taps, two texts at once).
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 

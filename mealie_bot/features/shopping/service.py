@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import difflib
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 
 from mealie_bot.features.shopping.parser import ParsedEntry
 from mealie_bot.i18n import unit_synonyms
+from mealie_bot.i18n.labels import label_color, label_emoji, split_label_name
 from mealie_bot.mealie import MealieClient
 from mealie_bot.mealie.client import JSON
 
@@ -26,6 +28,41 @@ _UPDATE_FIELDS = (
     "recipeReferences",
 )
 
+# Fields accepted by PUT /api/foods/{id} (CreateIngredientFood).
+_FOOD_FIELDS = (
+    "id",
+    "name",
+    "pluralName",
+    "description",
+    "extras",
+    "labelId",
+    "aliases",
+    "substitutions",
+    "householdsWithIngredientFood",
+)
+# Two names closer than this (difflib ratio) count as "did you mean".
+SIMILARITY_CUTOFF = 0.75
+
+
+def food_payload(food: JSON, label_id: str | None = None) -> JSON:
+    """The food as PUT /api/foods/{id} accepts it, with ``label_id`` set when given.
+
+    PUT replaces the whole food, so everything Mealie returned is sent back;
+    substitutions are returned as objects and accepted by id.
+    """
+    payload = {key: food[key] for key in _FOOD_FIELDS if key in food}
+    payload["substitutions"] = [
+        {
+            "substituteFoodId": sub.get("substituteFoodId")
+            or (sub.get("substituteFood") or {}).get("id"),
+            "note": sub.get("note") or "",
+        }
+        for sub in food.get("substitutions") or []
+    ]
+    if label_id is not None:
+        payload["labelId"] = label_id
+    return payload
+
 
 class NoShoppingListError(Exception):
     pass
@@ -40,10 +77,18 @@ def _spellings(entity: JSON) -> set[str]:
     return {name.strip().casefold() for name in names if isinstance(name, str) and name.strip()}
 
 
+def _closest(name: str, spellings: Iterable[str]) -> str | None:
+    matches = difflib.get_close_matches(
+        name.strip().casefold(), list(spellings), n=1, cutoff=SIMILARITY_CUTOFF
+    )
+    return matches[0] if matches else None
+
+
 class FoodIndex:
     """Exact, case-insensitive lookup of Mealie foods by name, plural name or alias."""
 
     def __init__(self, foods: list[JSON]) -> None:
+        self.foods = foods
         self._by_spelling: dict[str, JSON] = {}
         for food in foods:
             for spelling in _spellings(food):
@@ -51,6 +96,35 @@ class FoodIndex:
 
     def find(self, name: str) -> JSON | None:
         return self._by_spelling.get(name.strip().casefold())
+
+    def similar(self, name: str) -> JSON | None:
+        """The food whose spelling is closest to ``name`` ("Ketchap" → Ketchup), if close enough."""
+        spelling = _closest(name, self._by_spelling)
+        return self._by_spelling[spelling] if spelling else None
+
+
+class LabelIndex:
+    """Case-insensitive lookup of Mealie labels by name, with and without a leading emoji."""
+
+    def __init__(self, labels: list[JSON]) -> None:
+        self.labels = sorted(
+            labels, key=lambda label: split_label_name(str(label.get("name") or ""))[1].casefold()
+        )
+        self._by_spelling: dict[str, JSON] = {}
+        for label in labels:
+            name = str(label.get("name") or "")
+            for spelling in (name, split_label_name(name)[1]):
+                if spelling.strip():
+                    self._by_spelling.setdefault(spelling.strip().casefold(), label)
+
+    def find(self, name: str) -> JSON | None:
+        return self._by_spelling.get(name.strip().casefold()) or self._by_spelling.get(
+            split_label_name(name)[1].casefold()
+        )
+
+    def similar(self, name: str) -> JSON | None:
+        spelling = _closest(split_label_name(name)[1], self._by_spelling)
+        return self._by_spelling[spelling] if spelling else None
 
 
 class UnitResolver:
@@ -96,6 +170,37 @@ class AddResult:
 
 
 @dataclass(frozen=True)
+class AssignResult:
+    """Outcome of putting products into a category, with what it takes to undo it."""
+
+    # (product name as Mealie knows it, label) per product.
+    assigned: list[tuple[str, JSON]] = field(default_factory=list)
+    created_food_ids: list[str] = field(default_factory=list)
+    previous_foods: list[JSON] = field(default_factory=list)
+    previous_items: list[JSON] = field(default_factory=list)
+
+    def extend(self, other: AssignResult) -> None:
+        self.assigned.extend(other.assigned)
+        self.created_food_ids.extend(other.created_food_ids)
+        self.previous_foods.extend(other.previous_foods)
+        self.previous_items.extend(other.previous_items)
+
+    @property
+    def undoable(self) -> bool:
+        return bool(self.created_food_ids or self.previous_foods or self.previous_items)
+
+
+@dataclass(frozen=True)
+class LabelCounts:
+    """For the category overview: foods per label, foods and open list items without one."""
+
+    labels: list[JSON]
+    foods_per_label: dict[str, int]
+    foods_without_label: int
+    items_without_label: int
+
+
+@dataclass(frozen=True)
 class ListView:
     id: str
     name: str
@@ -123,6 +228,8 @@ class ShoppingService:
         self._units_loaded_at = 0.0
         self._foods: FoodIndex | None = None
         self._foods_loaded_at = 0.0
+        self._labels: LabelIndex | None = None
+        self._labels_loaded_at = 0.0
 
     # --- lists ------------------------------------------------------------
 
@@ -187,6 +294,106 @@ class ShoppingService:
         if food is None and self._clock() - self._foods_loaded_at > self._food_recheck_seconds:
             food = (await self.foods(reload=True)).find(name)
         return food
+
+    async def labels(self, *, reload: bool = False) -> LabelIndex:
+        """All Mealie labels, cached like the units; ``reload`` forces a fresh copy."""
+        now = self._clock()
+        if (
+            self._labels is None
+            or reload
+            or now - self._labels_loaded_at > self._unit_cache_seconds
+        ):
+            self._labels = LabelIndex(await self._client.get_labels())
+            self._labels_loaded_at = now
+        return self._labels
+
+    async def find_label(self, name: str) -> JSON | None:
+        """Exact match among all labels; a miss on a cache older than a minute reloads once."""
+        label = (await self.labels()).find(name)
+        if label is None and self._clock() - self._labels_loaded_at > self._food_recheck_seconds:
+            label = (await self.labels(reload=True)).find(name)
+        return label
+
+    async def create_label(self, name: str, emoji: Mapping[str, str] | None = None) -> JSON:
+        """Create a label; its colour follows its emoji (``LABEL_EMOJI`` overrides,
+        own emoji or the keyword table)."""
+        label = await self._client.create_label(name, label_color(label_emoji(name, emoji)))
+        self._labels = None
+        return label
+
+    # --- categories -------------------------------------------------------
+
+    async def assign(
+        self, list_id: str, names: Iterable[str], label: JSON, foods: dict[str, JSON | None]
+    ) -> AssignResult:
+        """Put products into ``label``: the food keeps the label for good, and the
+        list's items for that product follow right away.
+
+        ``foods`` maps a typed name to the food chosen for it; a missing or
+        ``None`` entry means a new food is created under that name. Items
+        that only carry the name as a note are linked to the food.
+        """
+        result = AssignResult()
+        label_id = str(label["id"])
+        items = (await self.view(list_id)).items
+        for name in names:
+            food = foods.get(name) or (await self.find_food(name))
+            if food is None:
+                food = await self._client.create_food(name, label_id)
+                result.created_food_ids.append(str(food["id"]))
+            elif food.get("labelId") != label_id:
+                result.previous_foods.append(dict(food))
+                payload = food_payload(food, label_id)
+                food = {**payload, **(await self._client.update_food(str(food["id"]), payload))}
+            result.assigned.append((str(food.get("name") or name), label))
+            for item in items:
+                is_food = (item.get("foodId") or (item.get("food") or {}).get("id")) == food["id"]
+                is_note = not item.get("foodId") and not item.get("food")
+                is_note = is_note and (item.get("note") or "").strip().casefold() == name.casefold()
+                if (is_food and item.get("labelId") != label_id) or is_note:
+                    result.previous_items.append(dict(item))
+                    payload = {key: item[key] for key in _UPDATE_FIELDS if key in item}
+                    payload.update({"foodId": food["id"], "labelId": label_id})
+                    if is_note:
+                        # The name moves from the note into the food; Mealie recomputes display.
+                        payload["note"] = ""
+                        payload.pop("display", None)
+                    await self._client.update_item(str(item["id"]), payload)
+        self._foods = None
+        return result
+
+    async def undo_assign(self, result: AssignResult) -> int:
+        """Revert one ``assign``: items first (so created foods are unreferenced), then
+        the foods' previous labels, then the created foods. Returns the number of
+        products reverted."""
+        for item in result.previous_items:
+            payload = {key: item[key] for key in _UPDATE_FIELDS if key in item}
+            await self._client.update_item(str(item["id"]), payload)
+        for food in result.previous_foods:
+            await self._client.update_food(str(food["id"]), food_payload(food))
+        for food_id in result.created_food_ids:
+            await self._client.delete_food(food_id)
+        self._foods = None
+        return len(result.assigned)
+
+    async def label_counts(self, list_id: str) -> LabelCounts:
+        labels = (await self.labels(reload=True)).labels
+        foods = (await self.foods(reload=True)).foods
+        per_label: dict[str, int] = {}
+        for food in foods:
+            if food.get("labelId"):
+                per_label[str(food["labelId"])] = per_label.get(str(food["labelId"]), 0) + 1
+        items = (await self.view(list_id)).items
+        return LabelCounts(
+            labels=labels,
+            foods_per_label=per_label,
+            foods_without_label=sum(1 for food in foods if not food.get("labelId")),
+            items_without_label=sum(
+                1
+                for item in items
+                if not item.get("checked") and not (item.get("labelId") or item.get("label"))
+            ),
+        )
 
     async def build_item(self, list_id: str, entry: ParsedEntry) -> JSON:
         units = await self.units()

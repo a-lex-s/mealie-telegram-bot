@@ -14,9 +14,10 @@ readable by that user (Compose bind-mounts it with its host permissions).
 | `BOT_LANGUAGE` | no | per user | Force `en` or `de` for everybody |
 | `SHOPPING_LIST` | no | first list | Default list, by name or ID |
 | `FEATURE_SHOPPING` | no | `true` | Enable the shopping list feature |
-| `DELETE_COMMANDS` | no | `true` | Delete your `/list`, `/lists`, `/clear` messages right away, so only the list stays in the chat; set `false` to keep them |
+| `DELETE_COMMANDS` | no | `true` | Delete your `/list`, `/lists`, `/clear`, `/category`, `/categories` messages right away, so only the list stays in the chat; set `false` to keep them |
 | `DELETE_ITEM_MESSAGES` | no | `true` | Delete your item messages (`2 l milk, eggs`) once the items are on the list; set `false` to keep them |
-| `LABEL_EMOJI` | no | built-in table | Emoji per Mealie label, e.g. `Würzmittel=🌶️;Tiere=🐾`; names must match exactly (case does not matter) and win over the built-in keyword table |
+| `LABEL_EMOJI` | no | built-in table | Emoji per Mealie label, e.g. `Würzmittel=🌶️;Tiere=🐾`; names must match exactly (case does not matter) and win over an emoji in the label name and the built-in keyword table |
+| `LABEL_ICONS` | no | `both` | What category buttons show in front of the name: `both` (colour circle and emoji, `🟣 🧂 Würzmittel`), `color` (`🟣 Würzmittel`), `emoji` (`🧂 Würzmittel`) or `none` (`Würzmittel`) |
 | `MEALIE_TIMEOUT` | no | `10` | Mealie request timeout in seconds |
 | `TZ` | no | UTC | Container time zone, e.g. `Europe/Berlin`; used for the "as of" time and history times |
 | `LOG_LEVEL` | no | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR` |
@@ -48,9 +49,15 @@ Category buttons show an emoji picked from the label name: the first keyword
 that occurs in the name wins, in German or English (`Obst`, `Fruit` → 🍎;
 `Milch`, `Dairy` → 🥛; `Würz`, `Spice`, `Sauce` → 🧂; `Drogerie`,
 `Personal Care` → 🧴; `Haushalt`, `Household` → 🧻; `Getränk`, `Drink` → 🥤 and
-so on; the full table is in `mealie_bot/i18n/labels.py`). Labels without a
-match and items without a label get 📦. To change or add one, set
-`LABEL_EMOJI` with exact label names separated by `;`:
+so on; the full table is in `mealie_bot/i18n/labels.py`). An emoji at the
+start of the label name in Mealie (`🧴 Drogerie`) is used as is. A label
+without a match shows the colour circle of its Mealie colour instead
+(`🟢 Eigenes`); only a label with neither, and items without a label, get 📦.
+`LABEL_ICONS` switches the circles, the emojis or both off; it applies to
+category buttons, the *Added* and *Sorted* quotes, `/categories` and the
+history. With `LABEL_ICONS=emoji` a label without match gets 📦 again, as
+before the circles existed. To change or add an emoji, set `LABEL_EMOJI` with
+exact label names separated by `;`:
 
 ```
 LABEL_EMOJI=Würzmittel=🌶️;Tiere=🐾;Sonstiges=🛍️

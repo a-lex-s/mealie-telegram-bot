@@ -17,6 +17,8 @@ from dataclasses import dataclass
 MAX_ENTRIES = 50
 MAX_ENTRY_LENGTH = 200
 MAX_QUANTITY = 10_000
+# A category name must fit on a button next to its emoji, count and arrow.
+MAX_LABEL_LENGTH = 40
 
 # Invisible characters that must not end up in Mealie or in rendered messages:
 # zero-width spaces/joiners, bidi controls, byte order mark.
@@ -37,6 +39,14 @@ class TooManyEntries(InputError):
 
 class EntryTooLong(InputError):
     pass
+
+
+class LabelTooLong(InputError):
+    pass
+
+
+class InvalidAssignment(ValueError):
+    """The message has an arrow but is not a readable "items → category" instruction."""
 
 
 def clean_text(text: str) -> str:
@@ -168,3 +178,60 @@ def parse_message(text: str, known_units: Container[str]) -> list[ParsedEntry]:
         raise EntryTooLong(MAX_ENTRY_LENGTH)
     entries = (parse_entry(part, known_units) for part in parts)
     return [entry for entry in entries if entry.name]
+
+
+# --- categories -------------------------------------------------------------
+
+# "Ketchup → Condiments": the arrow may be typed as →, ->, => or >.
+_ARROW = re.compile(r"\s*(?:→|->|=>|>)\s*")
+
+
+@dataclass(frozen=True)
+class Assignment:
+    """Products to put into one category, as typed ("Ketchup, Mustard → Condiments")."""
+
+    names: tuple[str, ...]
+    label: str
+
+
+def has_arrow(text: str) -> bool:
+    return _ARROW.search(text) is not None
+
+
+def parse_assignments(text: str, known_units: Container[str]) -> list[Assignment]:
+    """Parse "items → category" lines; one assignment per line.
+
+    Quantities in front of a product are ignored ("2 Ketchup → Condiments"
+    assigns Ketchup). Raises ``InvalidAssignment`` for a line without an
+    arrow, without products or without a category, and ``LabelTooLong``
+    for a category name over ``MAX_LABEL_LENGTH``.
+    """
+    assignments: list[Assignment] = []
+    total = 0
+    lines = [line for line in clean_text(text).split("\n") if line.strip()]
+    for line in lines:
+        left, sep, right = _split_arrow(line)
+        if not sep or has_arrow(right):
+            raise InvalidAssignment(line)
+        label = " ".join(right.split())
+        names = tuple(
+            entry.name
+            for entry in (parse_entry(part, known_units) for part in split_entries(left))
+            if entry.name
+        )
+        if not names or not label:
+            raise InvalidAssignment(line)
+        if len(label) > MAX_LABEL_LENGTH:
+            raise LabelTooLong(MAX_LABEL_LENGTH)
+        total += len(names)
+        if total > MAX_ENTRIES:
+            raise TooManyEntries(MAX_ENTRIES)
+        assignments.append(Assignment(names=names, label=label))
+    return assignments
+
+
+def _split_arrow(line: str) -> tuple[str, str, str]:
+    match = _ARROW.search(line)
+    if match is None:
+        return line, "", ""
+    return line[: match.start()], match.group(0), line[match.end() :]

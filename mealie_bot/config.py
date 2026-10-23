@@ -13,7 +13,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from mealie_bot.i18n import SUPPORTED_LANGUAGES
-from mealie_bot.i18n.labels import parse_label_emoji
+from mealie_bot.i18n.labels import LABEL_ICON_MODES, parse_label_emoji
 
 # Feature modules that exist in this build, with their default state.
 KNOWN_FEATURES: dict[str, bool] = {"shopping": True}
@@ -90,6 +90,8 @@ class Settings:
     delete_item_messages: bool = True
     # Exact label name (case-folded) -> emoji, from LABEL_EMOJI; keywords cover the rest.
     label_emoji: Mapping[str, str] = field(default_factory=dict)
+    # What is shown in front of category names: both, color, emoji or none (LABEL_ICONS).
+    label_icons: str = "both"
     log_level: str = "INFO"
     http_timeout: float = 10.0
 
@@ -123,6 +125,10 @@ class Settings:
         if log_level not in {"DEBUG", "INFO", "WARNING", "ERROR"}:
             raise ConfigError("LOG_LEVEL must be DEBUG, INFO, WARNING or ERROR")
 
+        label_icons = (_read(env, "LABEL_ICONS") or "both").lower()
+        if label_icons not in LABEL_ICON_MODES:
+            raise ConfigError("LABEL_ICONS must be one of: " + ", ".join(LABEL_ICON_MODES))
+
         timeout_raw = _read(env, "MEALIE_TIMEOUT") or "10"
         try:
             timeout = float(timeout_raw)
@@ -142,6 +148,7 @@ class Settings:
             delete_commands=_bool(env, "DELETE_COMMANDS", True),
             delete_item_messages=_bool(env, "DELETE_ITEM_MESSAGES", True),
             label_emoji=parse_label_emoji(_read(env, "LABEL_EMOJI")),
+            label_icons=label_icons,
             log_level=log_level,
             http_timeout=timeout,
         )

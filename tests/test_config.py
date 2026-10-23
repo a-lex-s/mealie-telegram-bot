@@ -15,6 +15,7 @@ def test_defaults():
     assert settings.allowed_user_ids == {1001, 1002}
     assert settings.delete_commands is True
     assert settings.label_emoji == {}
+    assert settings.label_icons == "both"
     assert settings.delete_item_messages is True
     assert settings.features == {"shopping"}
     assert settings.bot_language is None
@@ -63,6 +64,7 @@ def test_required(missing):
         ("LOG_LEVEL", "LOUD"),
         ("MEALIE_TIMEOUT", "-1"),
         ("MEALIE_TIMEOUT", "soon"),
+        ("LABEL_ICONS", "circles"),
     ],
 )
 def test_invalid(key, value):
@@ -87,8 +89,10 @@ def test_options():
             "DELETE_COMMANDS": "no",
             "DELETE_ITEM_MESSAGES": "0",
             "LABEL_EMOJI": "Würzmittel=🌶️; Tiere = 🐾 ;broken;=🙂",
+            "LABEL_ICONS": "Color",
         }
     )
+    assert settings.label_icons == "color"
     assert settings.label_emoji == {"würzmittel": "🌶️", "tiere": "🐾"}
     assert settings.delete_commands is False
     assert settings.delete_item_messages is False

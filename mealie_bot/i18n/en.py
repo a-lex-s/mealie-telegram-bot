@@ -5,6 +5,8 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "list": ("list", "Show the list"),
     "clear": ("clear", "Remove ticked-off items"),
     "lists": ("lists", "Switch list"),
+    "category": ("category", "Create a category"),
+    "categories": ("categories", "Show categories"),
     "help": ("help", "Help"),
 }
 
@@ -27,6 +29,7 @@ MESSAGES: dict[str, str] = {
         "<code>3x lemons</code>, <code>½ bread</code>\n"
         "One item per line, or separated by commas\n"
         "/{list} shows the list, tap an item to tick it off\n"
+        "<code>Ketchup → Condiments</code> puts a product into a category\n"
         "/{lists} switches lists · /{clear} removes ticked-off items · "
         "/{help} shows this again</blockquote>"
     ),
@@ -39,6 +42,13 @@ MESSAGES: dict[str, str] = {
         "/{list} shows the list. Tap a category to open it, tap an item to tick it off.\n"
         "/{lists} switches to another shopping list.\n"
         "/{clear} removes all ticked-off items after a confirmation.\n\n"
+        "<b>🏷️ Categories</b>\n"
+        "<code>Ketchup → Condiments</code> puts a product into a category, for good "
+        "(also <code>-></code>, <code>=></code> or <code>></code>; several products: "
+        "<code>Mustard, Mayo → Condiments</code>). "
+        "A new category is created after you confirm; a product Mealie does not know yet "
+        "is created too.\n"
+        "/{category} creates a category, /{categories} shows them all.\n\n"
         "<blockquote expandable>💡 <b>How the list behaves</b>\n"
         "There is always one list message, at the bottom of the chat. "
         "When you add items it moves down, and the old message turns into a short "
@@ -60,6 +70,34 @@ MESSAGES: dict[str, str] = {
         "⚠️ Telegram did not accept the list message. Please try again or open Mealie."
     ),
     "error.only_text": "I only understand text. Send the items as a message, or /help.",
+    # Categories
+    "category.usage": (
+        "🏷️ Name the category: <code>/{category} Household</code>. "
+        "Or sort a product directly: <code>Sponges → Household</code>"
+    ),
+    "category.too_long": "⚠️ A category name may have at most {max} characters.",
+    "category.exists": "🏷️ The category <b>{label}</b> already exists.",
+    "category.created": "🏷️ <b>New category:</b> {label}",
+    "category.list_header": "🏷️ <b>Categories</b> ({count})",
+    "category.list_line": "{label} · {count}",
+    "category.list_none": (
+        "🏷️ There are no categories yet. "
+        "Create one with /{category} or with <code>Ketchup → Condiments</code>."
+    ),
+    "category.list_uncategorized": (
+        "📦 Without category: {foods} products, {items} open on this list"
+    ),
+    "assign.not_understood": (
+        "I could not read that. Example: <code>Ketchup → Condiments</code> "
+        "or <code>Mustard, Mayo -> Condiments</code>, one category per line."
+    ),
+    "assign.ask_label": "❓ The category <b>{label}</b> does not exist yet.",
+    "assign.btn_label_new": "➕ Create {label}",
+    "assign.btn_label_use": "Use {label}",
+    "assign.ask_food": "❓ I do not know <b>{name}</b>. Did you mean <b>{food}</b>?",
+    "assign.btn_food_use": "Yes, {food}",
+    "assign.btn_food_new": "➕ No, create {name}",
+    "assign.stale": "⚠️ That question is no longer open. Please send the line again.",
     "error.unknown_command": "I do not know that command. /help lists what I can do.",
     # List message
     "shopping.list_header": "🛒 <b>{list}</b>",
@@ -69,6 +107,8 @@ MESSAGES: dict[str, str] = {
     "shopping.list_all_done": "🎉 All bought.",
     "shopping.added_header": "➕ <b>Added</b> ({count})",
     "shopping.added_one": "➕ <b>Added:</b> {item}",
+    "shopping.sorted_header": "🏷️ <b>Sorted</b> ({count})",
+    "shopping.sorted_one": "🏷️ <b>Sorted:</b> {item}",
     "shopping.done_quote": "✅ <b>Done</b>",
     "shopping.updated_at": "<i>As of {time}</i>",
     "shopping.more": "… and {count} more (open Mealie to see all)",
@@ -118,6 +158,8 @@ MESSAGES: dict[str, str] = {
     "history.cleared.one": "🧹 1 item removed",
     "history.undone": "↩️ {count} items undone",
     "history.undone.one": "↩️ 1 item undone",
+    "history.sorted": "🏷️ {items}",
+    "history.label": "🏷️ new category {items}",
 }
 
 UNITS: dict[str, list[str]] = {

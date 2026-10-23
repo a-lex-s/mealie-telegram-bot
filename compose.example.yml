@@ -32,6 +32,7 @@ services:
       # DELETE_COMMANDS: "true"   # delete /list etc. after handling; "false" keeps them
       # DELETE_ITEM_MESSAGES: "true"  # delete your item messages once added; "false" keeps them
       # LABEL_EMOJI: "Würzmittel=🌶️;Tiere=🐾"  # emoji per label name; otherwise a keyword table
+      # LABEL_ICONS: both          # before category names: both, color, emoji or none
       # TZ: Europe/Berlin          # time zone for the "as of" and history times
       # LOG_LEVEL: INFO
     secrets:

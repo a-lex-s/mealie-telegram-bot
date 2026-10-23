@@ -97,5 +97,7 @@ def test_menu_commands_localized():
         "list",
         "clear",
         "lists",
+        "category",
+        "categories",
         "help",
     ]

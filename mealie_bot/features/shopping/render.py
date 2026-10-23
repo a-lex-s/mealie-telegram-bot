@@ -17,10 +17,19 @@ from aiogram.enums import ButtonStyle
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from mealie_bot.features.shopping.service import AddResult
+from mealie_bot.features.shopping.service import AddResult, AssignResult
 from mealie_bot.i18n import Translator
-from mealie_bot.i18n.labels import label_emoji
+from mealie_bot.i18n.labels import (
+    FALLBACK_EMOJI,
+    LabelIcons,
+    color_circle,
+    find_label_emoji,
+    split_label_name,
+)
 from mealie_bot.mealie.client import JSON
+
+# Either the full display settings or just the LABEL_EMOJI overrides.
+Icons = LabelIcons | Mapping[str, str] | None
 
 # Telegram allows 100 buttons per keyboard; item buttons and category headers share
 # this budget, the rest is room for the control row.
@@ -68,6 +77,14 @@ class SelectList(CallbackData, prefix="sel"):
     list_id: str
 
 
+class AssignAnswer(CallbackData, prefix="as"):
+    """Answer to a question asked while sorting products into a category."""
+
+    # "label_new" | "label_use" | "food_new" | "food_use" | "cancel"
+    action: str
+    arg: str = ""  # label id or food id for "*_use"
+
+
 @dataclass
 class ListState:
     """Per-message display state of a list message."""
@@ -77,8 +94,12 @@ class ListState:
     list_id: str | None = None
     expanded: set[str] = field(default_factory=set)
     added: list[JSON] = field(default_factory=list)
-    # What the last "add items" on this message did, as long as it can be undone.
-    undo: AddResult | None = None
+    # Products just sorted into a category: (name, label) pairs, shown like ``added``.
+    sorted_into: list[tuple[str, JSON]] = field(default_factory=list)
+    # One extra HTML line above the list, e.g. "category created".
+    notice: str = ""
+    # What the last change on this message did, as long as it can be undone.
+    undo: AddResult | AssignResult | None = None
 
     def toggle(self, label_key: str) -> None:
         if label_key in self.expanded:
@@ -164,6 +185,30 @@ def label_name(item: JSON, tr: Translator) -> str:
     return str((item.get("label") or {}).get("name") or tr("shopping.label_none"))
 
 
+def label_text(name: str, color: str | None = None, emoji: Icons = None) -> str:
+    """Plain text for a label: colour circle, emoji, name (``🟢 🧂 Würzmittel``).
+
+    A label without an emoji match shows just its colour circle (``🟢 Drogerie``);
+    the fallback 📦 appears only when there is neither. An emoji that is part of
+    the Mealie name is shown once, in front of the rest. ``LABEL_ICONS`` can
+    switch circles, emojis or both off (``LabelIcons``).
+    """
+    icons = emoji if isinstance(emoji, LabelIcons) else LabelIcons(overrides=emoji or {})
+    circle = color_circle(color) if icons.circles else ""
+    _, plain = split_label_name(name)
+    found = ""
+    if icons.emojis:
+        found = find_label_emoji(name, icons.overrides) or ("" if circle else FALLBACK_EMOJI)
+    return " ".join(part for part in (circle, found, plain or name) if part)
+
+
+def label_dict_text(label: JSON | None, tr: Translator, emoji: Icons) -> str:
+    """``label_text`` for a Mealie label dict; ``None`` is "Other"."""
+    if not label:
+        return label_text(tr("shopping.label_none"), None, emoji)
+    return label_text(str(label.get("name") or "?"), label.get("color"), emoji)
+
+
 def _truncate(text: str, limit: int = MAX_BUTTON_TEXT) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
@@ -196,16 +241,16 @@ def progress_bar(done: int, total: int) -> str:
 
 def _group(
     items: list[JSON], tr: Translator, label_order: Mapping[str, int] | None = None
-) -> list[tuple[str, str, list[JSON]]]:
-    """Group open items by label: (label key, label name, items).
+) -> list[tuple[str, JSON | None, list[JSON]]]:
+    """Group open items by label: (label key, label dict or None, items).
 
     Labels follow the order set in Mealie for the list (``label_order``), labels
     without a position come after them alphabetically, "Other" is last.
     """
-    groups: dict[str, tuple[str, list[JSON]]] = {}
+    groups: dict[str, tuple[JSON | None, list[JSON]]] = {}
     for item in items:
         key = label_key(item)
-        groups.setdefault(key, (label_name(item, tr), []))[1].append(item)
+        groups.setdefault(key, (item.get("label") or None, []))[1].append(item)
     order = label_order or {}
     ordered = sorted(
         groups.items(),
@@ -213,19 +258,25 @@ def _group(
             kv[0] == NO_LABEL,
             kv[0] not in order,
             order.get(kv[0], 0),
-            kv[1][0].casefold(),
+            str((kv[1][0] or {}).get("name") or "").casefold(),
         ),
     )
     return [
-        (key, name, sorted(group, key=lambda i: i.get("position") or 0))
-        for key, (name, group) in ordered
+        (key, label, sorted(group, key=lambda i: i.get("position") or 0))
+        for key, (label, group) in ordered
     ]
 
 
-def category_title(name: str, count: int, expanded: bool, emoji: Mapping[str, str] | None) -> str:
-    """Text of a category header button: ``🧂 Würzmittel (2) ▾``."""
+def category_title(
+    name: str,
+    count: int,
+    expanded: bool,
+    emoji: Icons,
+    color: str | None = None,
+) -> str:
+    """Text of a category header button: ``🟢 🧂 Würzmittel (2) ▾``."""
     arrow = "▾" if expanded else "▸"
-    return f"{label_emoji(name, emoji)} {name} ({count}) {arrow}"
+    return f"{label_text(name, color, emoji)} ({count}) {arrow}"
 
 
 def render_list(
@@ -234,12 +285,13 @@ def render_list(
     state: ListState,
     tr: Translator,
     now: datetime | None = None,
-    emoji: Mapping[str, str] | None = None,
+    emoji: Icons = None,
     lists: list[JSON] | None = None,
     active_id: str = "",
     label_order: Mapping[str, int] | None = None,
 ) -> tuple[str, InlineKeyboardMarkup]:
-    """Render the list message; ``emoji`` holds ``LABEL_EMOJI`` overrides for categories,
+    """Render the list message; ``emoji`` says how categories are shown (``LabelIcons``,
+    or just the ``LABEL_EMOJI`` overrides),
     ``label_order`` the category positions from Mealie's list settings.
 
     ``lists`` and ``active_id`` are only needed for the list chooser view.
@@ -273,13 +325,11 @@ def render_list(
         lines.append(tr("shopping.list_all_done" if checked else "shopping.list_empty"))
         if not items and time_text:
             lines.append(tr("shopping.updated_at", time=time_text))
+    if state.notice:
+        lines.append(state.notice)
     if state.added:
         added_lines = [
-            item_html(
-                item,
-                language,
-                f"{label_emoji(label_name(item, tr), emoji)} {escape(label_name(item, tr))}",
-            )
+            item_html(item, language, escape(label_dict_text(item.get("label"), tr, emoji)))
             for item in state.added
         ]
         if len(added_lines) == 1:
@@ -287,6 +337,17 @@ def render_list(
         else:
             lines.append(
                 _quote(tr("shopping.added_header", count=len(added_lines)), added_lines, tr)
+            )
+    if state.sorted_into:
+        sorted_lines = [
+            f"<b>{escape(name)}</b> · <i>{escape(label_dict_text(label, tr, emoji))}</i>"
+            for name, label in state.sorted_into
+        ]
+        if len(sorted_lines) == 1:
+            lines.append(tr("shopping.sorted_one", item=sorted_lines[0]))
+        else:
+            lines.append(
+                _quote(tr("shopping.sorted_header", count=len(sorted_lines)), sorted_lines, tr)
             )
     if checked:
         done_lines = [f"<s>{escape(item_display(i, language))}</s>" for i in checked]
@@ -298,13 +359,17 @@ def render_list(
     budget = MAX_ITEM_BUTTONS - (len(groups) if len(groups) > 1 else 0)
     shown = 0
     hidden = 0
-    for key, group_name, group in groups:
+    for key, label, group in groups:
         expanded = len(groups) == 1 or key in state.expanded
         if len(groups) > 1:
+            group_name = str((label or {}).get("name") or tr("shopping.label_none"))
+            color = (label or {}).get("color")
             rows.append(
                 [
                     InlineKeyboardButton(
-                        text=_truncate(category_title(group_name, len(group), expanded, emoji)),
+                        text=_truncate(
+                            category_title(group_name, len(group), expanded, emoji, color)
+                        ),
                         callback_data=ListAction(action="toggle", view=VIEW_OPEN, arg=key).pack(),
                         style=STYLE_CATEGORY,
                     )
