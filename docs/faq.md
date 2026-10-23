@@ -21,9 +21,18 @@ permissions. Make them readable for that user: `chmod 644 secrets/*`.
 Your Telegram user ID is not in `ALLOWED_USER_IDS`. The log shows the ID at
 `WARNING` level, once per unknown sender.
 
+**Private chats or a group?**
+Both work. With a private chat per person, each person has their own list
+message and history; a change made by one person quietly updates the other's
+list message, and their history names who did it. A group with both people and
+the bot gives one shared list message and one history with names.
+
 **Why does the bot not react to plain text in a group?**
-Telegram's privacy mode only delivers commands to bots in groups. Use a private
-chat per person; everyone still works on the same Mealie list.
+Telegram's privacy mode only delivers commands to bots in groups. Turn it off
+for the bot in @BotFather (`/setprivacy`), then remove and re-add the bot to
+the group. To delete handled messages there (`DELETE_COMMANDS`,
+`DELETE_ITEM_MESSAGES`), make the bot a group administrator that may delete
+messages.
 
 **Can I add the bot to a group?**
 Only if everyone in the group may see the list: the list message, the history
@@ -45,8 +54,9 @@ the note while the food (and its category) is still matched; lists must exist
 in Mealie. A food created in Mealie is picked up within a minute.
 
 **Changes made in Mealie do not show up in Telegram.**
-Tap *Refresh* (or any button) or send `/list` again. There are no push
-notifications in version 1.
+Tap *Refresh* (or any button) or send `/list` again. Changes made through the
+bot by the other person do show up: their change re-renders your list message
+in place. There are no push notifications in version 1.
 
 **Where did my `/list` message go?**
 The bot deletes `/list`, `/lists` and `/clear` right away so that only the

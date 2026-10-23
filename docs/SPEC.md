@@ -70,8 +70,14 @@ Mealie as done by that user. Its household determines which lists are visible.
   messages and button taps. Everything else is dropped without a reply and
   without a Telegram API call; the user ID is logged once per process at
   WARNING level so an operator can add it, and a stranger cannot flood the log.
-* The bot is meant for private chats. In groups, Telegram's privacy mode only
-  delivers commands, so adding items by plain text does not work there.
+* The bot works in a private chat per person or in one group that both people
+  share. The code keeps its state per chat either way (see 6.4 and 6.6).
+* In a group, Telegram's privacy mode delivers only commands to the bot. For
+  plain-text items, turn privacy mode off for the bot in @BotFather
+  (`/setprivacy`) before adding it to the group; for `DELETE_COMMANDS` and
+  `DELETE_ITEM_MESSAGES` the bot must be a group administrator allowed to
+  delete messages. The allow list applies to the sender of each message, not
+  to the group.
 
 ## 5. Languages
 
@@ -119,9 +125,10 @@ message simply stays and the list is sent again below it.
 
 ### 6.2 Active list
 
-The active list of a user is, in this order: the list the user picked with
-`/lists`, the list named by `SHOPPING_LIST`, the first list by name. The choice
-made with `/lists` is kept in memory and resets when the bot restarts. If Mealie
+The active list of a chat is, in this order: the list picked with `/lists` in
+that chat, the list named by `SHOPPING_LIST`, the first list by name. The
+choice made with `/lists` belongs to the chat (so in a group both people work
+on the same list), is kept in memory and resets when the bot restarts. If Mealie
 has no shopping list, the bot says so; it never creates lists.
 
 `/lists` renders a chooser into the live list message (6.4): one button per
@@ -203,8 +210,8 @@ is shown; the bot edits it in place instead of posting new messages.
   message, an error), the list is sent again at the bottom of the chat and the
   old message becomes a history entry or is deleted (6.6).
 * A list message remembers which list it shows. Taps on it refresh that list,
-  even if the person tapping has since chosen another list with `/lists`; a
-  tap on a message from before a restart falls back to the active list.
+  even if someone has since chosen another list with `/lists` in that chat; a
+  tap on a message from before a restart falls back to the chat's active list.
 * Updates in one chat are handled one after another (a lock per chat), so two
   taps or two texts at the same time cannot produce two live messages or
   race on the same item.
@@ -219,8 +226,10 @@ is shown; the bot edits it in place instead of posting new messages.
 * Quantities: whole numbers as such, pure fractions as `½ ¼ ¾ ⅓ ⅔`, everything
   else with at most two decimals (`1,5` in German, `1.5` in English).
 * Keyboard: one header button per label (`🧂 Label (n) ▸` collapsed,
-  `🧂 Label (n) ▾` expanded), labels alphabetical with unlabelled items last as
-  "Other". All categories start collapsed; tapping a header toggles it for that
+  `🧂 Label (n) ▾` expanded). Labels follow the order set for the list in
+  Mealie (`labelSettings`, the same order as in Mealie's list view); labels
+  without a position come after them alphabetically, unlabelled items are last
+  as "Other". All categories start collapsed; tapping a header toggles it for that
   message. A list with a single category shows its items directly without a
   header.
 * Header buttons are coloured blue (Bot API button `style` `primary`), item
@@ -248,10 +257,15 @@ is shown; the bot edits it in place instead of posting new messages.
   (toast "🔁 … is open again"). **🛒 Open (n)** switches back, **Remove (m)**
   asks for confirmation.
 * **Refresh** reloads the list and answers with a toast (`🔄 Refreshed`).
-  Changes made in Mealie or by the other person show up on refresh or with the
-  next action; there is no push notification. Opening or closing a category
-  re-renders from the items fetched last, without asking Mealie, so the time
-  in the status line stays that of the last fetch.
+  Changes made in Mealie show up on refresh or with the next action; there is
+  no push notification. Opening or closing a category re-renders from the
+  items fetched last, without asking Mealie, so the time in the status line
+  stays that of the last fetch.
+* A change made through the bot in one chat (items added, ticked off, put
+  back, removed or undone) also re-renders the live messages of the other
+  chats the bot knows since its start, if they show the same list: quietly,
+  in place and in each chat's language. The other person sees the current
+  list when they look at the chat; no message is sent and nothing beeps.
 * Item buttons and category headers share a budget of 80 buttons (Telegram
   allows 100 per message); items beyond it are counted in the text. Quotes
   (*Added*, *Done*, the removal question) list at most 20 items and count the
@@ -279,14 +293,19 @@ is not simply deleted:
   put back, removed or undone), the old message is rewritten into a compact
   history entry: `📜 <b>list</b>` followed by one line per change,
   `<i>HH:MM · first name</i> ➕ items` (`✅` ticked off, `🔁` put back,
-  `🧹 n items removed`, `↩️ n items undone`). Consecutive changes of the same kind by the
-  same person are merged into one line; items are written as one would type
-  them (`500 g Mehl`); at most 8 item names are listed per line and 12 lines
-  per entry. Changes from a day other than the one the entry is written on
-  carry their date before the time (`01.10. 21:12` in German, `Oct 01 21:12`
-  in English).
-* If the previous history entry is less than 15 minutes old, the new changes
-  are appended to that entry instead and the old list message is deleted.
+  `🧹 n items removed`, `↩️ n items undone`). In a private chat the owner's own
+  name is left out (`<i>HH:MM</i> ➕ items`); the other person's name and every
+  name in a group stay. Consecutive changes of the same kind by the same person
+  are merged into one line; items are written as one would type them
+  (`500 g Mehl`); at most 8 item names are listed per line and 12 lines per
+  entry. Changes from a day other than the one the entry is written on carry
+  their date before the time (`01.10. 21:12` in German, `Oct 01 21:12` in
+  English).
+* Changes are recorded in the history of every chat that shows the same list,
+  so both people's histories are complete.
+* If the latest change in the previous history entry is less than 15 minutes
+  old, the new changes are appended to that entry instead and the old list
+  message is deleted.
 * If nothing changed, the old list message is deleted.
 * Telegram lets bots delete messages for 48 hours only. If deleting fails,
   the old list message is rewritten into a stub without buttons instead
@@ -378,4 +397,5 @@ OpenAPI file when `MEALIE_OPENAPI` points to one.
 * `features/recipes`: search recipes, add a recipe's ingredients to the list.
 * `features/mealplan`: show and edit the week's meal plan.
 * Possibly: remember the active list, history and undo data across restarts,
-  notify the other person about changes.
+  notify the other person about changes (today their list is only updated
+  quietly).

@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A change made in one chat re-renders the live list messages of the other
+  chats on the same list, and is recorded in their histories too; in a private
+  chat the owner's own name is left out of the history.
+- Categories follow the order set for the list in Mealie instead of being
+  alphabetical; the list chosen with `/lists` belongs to the chat, not the user.
+- The 15-minute history window counts from the latest change of an entry.
+- Documentation covers the group chat set-up (privacy mode off, bot as admin).
 - Foods are loaded once and cached for 10 minutes (reloaded on a miss after a
   minute) instead of searching Mealie per entry, so exact matches are no
   longer limited to the first 20 search results.

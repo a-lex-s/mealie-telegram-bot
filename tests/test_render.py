@@ -223,3 +223,16 @@ def test_quantities_and_progress():
     assert progress_bar(1, 3) == "▰▰▰▱▱▱▱▱▱▱"
     assert progress_bar(1, 40) == "▰" + "▱" * 9  # something done shows
     assert progress_bar(39, 40) == "▰" * 9 + "▱"  # something open shows
+
+
+def test_categories_follow_the_order_set_in_mealie():
+    items = [
+        make_item("1", "Milk", label="Dairy"),
+        make_item("2", "Apple", label="Fruit"),
+        make_item("3", "Soap"),
+        make_item("4", "Bread", label="Bakery"),
+    ]
+    order = {"l-Fruit": 0, "l-Dairy": 1}  # Bakery has no position: alphabetical after them
+    _, markup = render_list("G", items, ListState(), EN, label_order=order)
+    headers = [text.split(" (")[0] for text in button_texts(markup)[:4]]
+    assert headers == ["🍎 Fruit", "🥛 Dairy", "🍞 Bakery", "📦 Other"]

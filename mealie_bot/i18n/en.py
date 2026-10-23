@@ -110,6 +110,7 @@ MESSAGES: dict[str, str] = {
     "history.line": "<i>{time} · {user}</i> {what}",
     # Day shown before the time for entries from another day (strftime format).
     "history.date_format": "%b %d",
+    "history.line_own": "<i>{time}</i> {what}",
     "history.added": "➕ {items}",
     "history.checked": "✅ {items}",
     "history.unchecked": "🔁 {items}",

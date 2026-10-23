@@ -13,8 +13,10 @@ from mealie_bot.i18n import Translator
 T0 = datetime(2026, 1, 1, 21, 0)
 
 
-def event(kind, user="Alice", minutes=0, items=(), count=0):
-    return HistoryEvent(kind, user, T0 + timedelta(minutes=minutes), list(items), count)
+def event(kind, user="Alice", minutes=0, items=(), count=0, user_id=None):
+    return HistoryEvent(
+        kind, user, T0 + timedelta(minutes=minutes), list(items), count, user_id=user_id
+    )
 
 
 def test_consecutive_same_kind_events_merge():
@@ -85,3 +87,29 @@ def test_render_history_dates_entries_from_other_days():
     assert lines[2] == "<i>21:00 · Alice</i> ✅ milk"
     lines = render_history("G", events, Translator("en"), today=today).split("\n")
     assert lines[1] == "<i>Jan 01 21:00 · Alice</i> ➕ milk"
+
+
+def test_window_counts_from_the_latest_change_of_the_entry():
+    chat = ChatState()
+    chat.record(event("checked", items=["Milk"]))
+    chat.record(event("checked", items=["Eggs"], minutes=20))  # merged into one line
+    chat.take_pending()
+    chat.history_message_id = 42
+    chat.record(event("added", items=["Bread"], minutes=30))
+    extend, _ = chat.take_pending()
+    assert extend  # 10 minutes after the last change, although 30 after the first
+
+
+def test_render_history_hides_the_chat_owners_own_name():
+    events = [
+        event("added", items=["Milk"], user_id=1001),
+        event("checked", user="Bob", minutes=5, items=["Milk"], user_id=1002),
+    ]
+    lines = render_history("G", events, Translator("en"), owner_id=1001).split("\n")
+    assert lines[1] == "<i>21:00</i> ➕ Milk"
+    assert lines[2] == "<i>21:05 · Bob</i> ✅ Milk"
+    # In a group (no owner) every line carries the name.
+    assert (
+        render_history("G", events, Translator("en")).split("\n")[1]
+        == "<i>21:00 · Alice</i> ➕ Milk"
+    )

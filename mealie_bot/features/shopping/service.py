@@ -100,6 +100,8 @@ class ListView:
     id: str
     name: str
     items: list[JSON]
+    # Category order as set in Mealie for this list: label id -> position.
+    label_order: dict[str, int] = field(default_factory=dict)
 
 
 class ShoppingService:
@@ -127,14 +129,14 @@ class ShoppingService:
     async def lists(self) -> list[JSON]:
         return await self._client.get_shopping_lists()
 
-    async def active_list(self, user_id: int) -> JSON:
-        return self.pick_list(await self.lists(), user_id)
+    async def active_list(self, chat_id: int) -> JSON:
+        return self.pick_list(await self.lists(), chat_id)
 
-    def pick_list(self, lists: list[JSON], user_id: int) -> JSON:
-        """The user's active list: their choice, then SHOPPING_LIST, then the first list."""
+    def pick_list(self, lists: list[JSON], chat_id: int) -> JSON:
+        """The list a chat works on: chosen with /lists, else SHOPPING_LIST, else the first."""
         if not lists:
             raise NoShoppingListError
-        wanted = [self._selected.get(user_id), self._default_list]
+        wanted = [self._selected.get(chat_id), self._default_list]
         for key in filter(None, wanted):
             for shopping_list in lists:
                 if (
@@ -144,13 +146,21 @@ class ShoppingService:
                     return shopping_list
         return lists[0]
 
-    def select_list(self, user_id: int, list_id: str) -> None:
-        self._selected[user_id] = list_id
+    def select_list(self, chat_id: int, list_id: str) -> None:
+        self._selected[chat_id] = list_id
 
     async def view(self, list_id: str) -> ListView:
         data = await self._client.get_shopping_list(list_id)
+        order = {
+            str(setting["labelId"]): int(setting["position"])
+            for setting in data.get("labelSettings") or []
+            if setting.get("labelId") is not None and setting.get("position") is not None
+        }
         return ListView(
-            id=data["id"], name=data.get("name") or "", items=list(data.get("listItems") or [])
+            id=data["id"],
+            name=data.get("name") or "",
+            items=list(data.get("listItems") or []),
+            label_order=order,
         )
 
     # --- items ------------------------------------------------------------

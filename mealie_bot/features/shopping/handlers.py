@@ -113,22 +113,22 @@ class ShoppingUI:
 
     # --- rendering ----------------------------------------------------------
 
-    async def list_id(self, user_id: int, state: ListState) -> str:
-        """The list a message shows: fixed on first render, else the user's active list."""
+    async def list_id(self, chat_id: int, state: ListState) -> str:
+        """The list a message shows: fixed on first render, else the chat's active list."""
         if state.list_id is None:
-            state.list_id = str((await self.service.active_list(user_id))["id"])
+            state.list_id = str((await self.service.active_list(chat_id))["id"])
         return state.list_id
 
     async def render(
-        self, chat_id: int, user_id: int, state: ListState, tr: Translator, cached: bool = False
+        self, chat_id: int, state: ListState, tr: Translator, cached: bool = False
     ) -> tuple[str, InlineKeyboardMarkup, str]:
         try:
-            list_id = await self.list_id(user_id, state)
+            list_id = await self.list_id(chat_id, state)
             data, now = await self._view(chat_id, list_id, cached)
         except MealieNotFound:
             # The list was deleted in Mealie: fall back to whatever is active now.
             state.list_id = None
-            list_id = await self.list_id(user_id, state)
+            list_id = await self.list_id(chat_id, state)
             data, now = await self._view(chat_id, list_id, cached)
         lists = await self.service.lists() if state.view == VIEW_LISTS else None
         text, markup = render_list(
@@ -140,7 +140,10 @@ class ShoppingUI:
             emoji=self.label_emoji,
             lists=lists,
             active_id=list_id,
+            label_order=data.label_order,
         )
+        # Remembered so that a change in another chat can re-render this one.
+        self.chat(chat_id).language = tr.language
         return text, markup, data.name
 
     async def _view(self, chat_id: int, list_id: str, cached: bool) -> tuple[ListView, datetime]:
@@ -151,10 +154,10 @@ class ShoppingUI:
         self.cache[chat_id] = (data, now)
         return data, now
 
-    async def show(self, message: Message, user_id: int, tr: Translator, state: ListState) -> None:
+    async def show(self, message: Message, tr: Translator, state: ListState) -> None:
         """Show the list as the live message: edit it if it is still last, else re-send."""
         chat = self.chat(message.chat.id)
-        text, markup, list_name = await self.render(message.chat.id, user_id, state, tr)
+        text, markup, list_name = await self.render(message.chat.id, state, tr)
         await self._drop_errors(message, chat)
         if chat.live_message_id is not None and chat.live_is_last:
             with suppress(*_TELEGRAM_ERRORS):
@@ -165,27 +168,44 @@ class ShoppingUI:
         await self._relocate(chat, message, sent.message_id, list_name, tr)
         chat.states[sent.message_id] = state
 
-    async def show_in(
-        self, message: Message, user_id: int, tr: Translator, state: ListState
-    ) -> None:
+    async def show_in(self, message: Message, tr: Translator, state: ListState) -> None:
         """Turn ``message`` (a bot message) into the live list message."""
         chat = self.chat(message.chat.id)
-        text, markup, list_name = await self.render(message.chat.id, user_id, state, tr)
+        text, markup, list_name = await self.render(message.chat.id, state, tr)
         with suppress(*_TELEGRAM_ERRORS):
             await _edit(message.bot, message.chat.id, message.message_id, text, markup)
         if chat.live_message_id != message.message_id:
             await self._relocate(chat, message, message.message_id, list_name, tr)
         chat.states[message.message_id] = state
 
-    async def refresh(
-        self, message: Message, user_id: int, tr: Translator, cached: bool = False
-    ) -> None:
+    async def refresh(self, message: Message, tr: Translator, cached: bool = False) -> None:
         """Re-render a list message in place with its own display state."""
         chat = self.chat(message.chat.id)
         state = chat.state_for(message.message_id)
-        text, markup, _ = await self.render(message.chat.id, user_id, state, tr, cached=cached)
+        text, markup, _ = await self.render(message.chat.id, state, tr, cached=cached)
         with suppress(*_TELEGRAM_ERRORS):
             await _edit(message.bot, message.chat.id, message.message_id, text, markup)
+
+    async def sync_others(self, bot: Bot | None, origin_chat_id: int) -> None:
+        """After a change in one chat, re-render the live messages of the other chats
+        that show the same list, quietly and in their own language. There is no
+        notification; the other person sees the change when they look."""
+        origin = self.chat(origin_chat_id)
+        if bot is None or origin.live_list_id is None:
+            return
+        for chat_id, chat in list(self.chats.items()):
+            if chat_id == origin_chat_id or chat.live_message_id is None:
+                continue
+            if chat.live_list_id != origin.live_list_id or chat.language is None:
+                continue
+            try:
+                tr = Translator(chat.language)
+                state = chat.state_for(chat.live_message_id)
+                text, markup, _ = await self.render(chat_id, state, tr)
+                with suppress(*_TELEGRAM_ERRORS):
+                    await _edit(bot, chat_id, chat.live_message_id, text, markup)
+            except (MealieError, NoShoppingListError) as exc:
+                log.warning("Syncing list for another chat failed: %s", exc)
 
     async def _drop_errors(self, message: Message, chat: ChatState) -> None:
         """Delete the bot's own error messages once the list is shown again."""
@@ -215,7 +235,13 @@ class ShoppingUI:
         if events and chat.history_message_id is not None:
             with suppress(*_TELEGRAM_ERRORS):
                 await message.bot.edit_message_text(
-                    render_history(list_name, events, tr, today=self.clock().date()),
+                    render_history(
+                        list_name,
+                        events,
+                        tr,
+                        today=self.clock().date(),
+                        owner_id=_owner_id(message),
+                    ),
                     chat_id=message.chat.id,
                     message_id=chat.history_message_id,
                 )
@@ -242,8 +268,31 @@ class ShoppingUI:
         """A message arrived or was sent below the live list."""
         self.chat(message.chat.id).live_is_last = False
 
-    def record(self, chat_id: int, kind: str, user: str, items: list[str], count: int = 0) -> None:
-        self.chat(chat_id).record(HistoryEvent(kind, user, self.clock(), items, count))
+    def record(
+        self,
+        chat_id: int,
+        kind: str,
+        actor: Message | CallbackQuery,
+        items: list[str],
+        count: int = 0,
+    ) -> None:
+        """Note a change for the history of this chat and of every other chat
+        that shows the same list, so both people's histories are complete."""
+        user = actor.from_user
+        event = HistoryEvent(
+            kind,
+            (user.first_name if user else None) or "?",
+            self.clock(),
+            items,
+            count,
+            user_id=user.id if user else None,
+        )
+        origin = self.chat(chat_id)
+        origin.record(event)
+        list_id = origin.live_list_id
+        for other_id, other in self.chats.items():
+            if other_id != chat_id and list_id is not None and other.live_list_id == list_id:
+                other.record(HistoryEvent(**vars(event)))
 
     async def tidy(self, message: Message, *, items: bool = False) -> None:
         """Delete the user's message if configured, and note whether the list must move.
@@ -278,14 +327,9 @@ async def _edit(
             raise
 
 
-def _user_id(message: Message) -> int:
-    # AccessMiddleware only lets messages with a known user through.
-    return message.from_user.id if message.from_user else 0
-
-
-def _user_name(message_or_query: Message | CallbackQuery) -> str:
-    user = message_or_query.from_user
-    return (user.first_name if user else None) or "?"
+def _owner_id(message: Message) -> int | None:
+    """The user a private chat belongs to; their own name is left out of the history."""
+    return message.chat.id if message.chat.type == "private" else None
 
 
 def build_router(context: FeatureContext) -> Router:
@@ -323,7 +367,7 @@ def build_router(context: FeatureContext) -> Router:
         async with ui.locked(message.chat.id):
             await ui.tidy(message)
             try:
-                await ui.show(message, _user_id(message), tr, state)
+                await ui.show(message, tr, state)
             except _SHOW_ERRORS as exc:
                 await send_error(message, tr, exc)
 
@@ -373,7 +417,7 @@ def build_router(context: FeatureContext) -> Router:
             if message.bot is not None:
                 with suppress(*_TELEGRAM_ERRORS):
                     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-            shopping_list = await service.active_list(_user_id(message))
+            shopping_list = await service.active_list(message.chat.id)
             result = await service.add_entries(shopping_list["id"], entries)
         except (MealieError, NoShoppingListError) as exc:
             ui.note_message(message)
@@ -383,7 +427,7 @@ def build_router(context: FeatureContext) -> Router:
         # something went wrong above, so it can be resent).
         await ui.tidy(message, items=True)
         names = [item_inline(item, tr.language) for item in result.items]
-        ui.record(message.chat.id, "added", _user_name(message), names)
+        ui.record(message.chat.id, "added", message, names)
         state = ListState(
             list_id=str(shopping_list["id"]),
             expanded={label_key(item) for item in result.items},
@@ -391,9 +435,11 @@ def build_router(context: FeatureContext) -> Router:
             undo=result if result.undoable else None,
         )
         try:
-            await ui.show(message, _user_id(message), tr, state)
+            await ui.show(message, tr, state)
         except _SHOW_ERRORS as exc:
             await send_error(message, tr, exc)
+            return
+        await ui.sync_others(message.bot, message.chat.id)
 
     # --- buttons --------------------------------------------------------
 
@@ -423,15 +469,16 @@ def build_router(context: FeatureContext) -> Router:
             ui.record(
                 message.chat.id,
                 "checked" if checked else "unchecked",
-                _user_name(query),
+                query,
                 [item_inline(item, tr.language)],
             )
             key = "shopping.toast_checked" if checked else "shopping.toast_unchecked"
             await query.answer(toast_text(tr(key, item=name)))
         try:
-            await ui.refresh(message, query.from_user.id, tr)
+            await ui.refresh(message, tr)
         except (MealieError, NoShoppingListError) as exc:
             log.warning("Refreshing list failed: %s", exc)
+        await ui.sync_others(message.bot, message.chat.id)
 
     @router.callback_query(ListAction.filter())
     async def on_list(query: CallbackQuery, callback_data: ListAction, tr: Translator) -> None:
@@ -469,14 +516,14 @@ def build_router(context: FeatureContext) -> Router:
                     # attempt (Mealie down) can be repeated.
                     created_ids = [item["id"] for item in state.undo.created]
                     count = await service.undo_add(created_ids, state.undo.previous)
-                    ui.record(message.chat.id, "undone", _user_name(query), [], count)
+                    ui.record(message.chat.id, "undone", query, [], count)
                     await query.answer(tr("shopping.toast_undone", count=count))
                 state.undo = None
                 state.added = []
             elif action == "clear":
-                list_id = await ui.list_id(query.from_user.id, state)
+                list_id = await ui.list_id(message.chat.id, state)
                 removed = await service.clear_checked(list_id)
-                ui.record(message.chat.id, "cleared", _user_name(query), [], len(removed))
+                ui.record(message.chat.id, "cleared", query, [], len(removed))
                 await query.answer(tr("shopping.cleared", count=len(removed)))
                 state.view = VIEW_OPEN
             elif action == "clear_ask":
@@ -489,7 +536,9 @@ def build_router(context: FeatureContext) -> Router:
                     if callback_data.view in {VIEW_OPEN, VIEW_DONE}
                     else VIEW_OPEN
                 )
-            await ui.refresh(message, query.from_user.id, tr, cached=cached)
+            await ui.refresh(message, tr, cached=cached)
+            if action in {"undo", "clear"}:
+                await ui.sync_others(message.bot, message.chat.id)
         except (MealieError, NoShoppingListError) as exc:
             await toast_error(query, tr, exc)
 
@@ -499,12 +548,12 @@ def build_router(context: FeatureContext) -> Router:
         if not isinstance(message, Message) or not valid_id(callback_data.list_id):
             await query.answer()
             return
-        service.select_list(query.from_user.id, callback_data.list_id)
+        service.select_list(message.chat.id, callback_data.list_id)
         async with ui.locked(message.chat.id):
             try:
                 await query.answer()
                 state = ListState(list_id=callback_data.list_id)
-                await ui.show_in(message, query.from_user.id, tr, state)
+                await ui.show_in(message, tr, state)
             except (MealieError, NoShoppingListError) as exc:
                 await toast_error(query, tr, exc)
 

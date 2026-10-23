@@ -212,3 +212,20 @@ async def test_clear_checked(service, mealie_mock):
     route = mealie_mock.delete("/api/households/shopping/items").respond(json={"message": "ok"})
     assert [i["id"] for i in await service.clear_checked(LIST_ID)] == ["a"]
     assert route.calls.last.request.url.params.get_list("ids") == ["a"]
+
+
+async def test_view_reads_the_label_order(service, mealie_mock):
+    mealie_mock.get(f"/api/households/shopping/lists/{LIST_ID}").respond(
+        json={
+            "id": LIST_ID,
+            "name": "Groceries",
+            "listItems": [],
+            "labelSettings": [
+                {"labelId": "l-2", "position": 1},
+                {"labelId": "l-1", "position": 0},
+                {"labelId": None, "position": 5},
+            ],
+        }
+    )
+    view = await service.view(LIST_ID)
+    assert view.label_order == {"l-2": 1, "l-1": 0}

@@ -14,6 +14,8 @@ Version 1 is a shopping list helper for a small household: send items as a
 message, tick them off with a tap, and everyone sees the same list in Mealie and
 in Telegram. Recipes and meal plans may follow as separate, optional modules.
 
+* Works in a private chat per person or in one shared group; a change by one
+  person quietly updates the other's list message
 * English and German, chosen per user from the Telegram language
 * Understands quantities and units: `2 l milk`, `500g flour`, `milk 2l`, `3x lemons`
 * Uses Mealie's foods, units and labels, so items land in the right category

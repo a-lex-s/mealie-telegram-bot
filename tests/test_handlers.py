@@ -429,7 +429,8 @@ async def test_old_list_message_becomes_history_when_items_were_added(harness, m
     await feed(message("6 eggs", message_id=2))
     history = [e for e in session.sent(EditMessageText) if e.message_id == first]
     assert history and history[-1].text.startswith("📜 <b>Groceries</b>\n")
-    assert "· Alice</i> ➕ 6 eggs" in history[-1].text
+    # In a private chat the owner's own name is left out.
+    assert "</i> ➕ 6 eggs" in history[-1].text and "Alice" not in history[-1].text
     assert first not in [d.message_id for d in session.sent(DeleteMessage)]
 
 
@@ -751,3 +752,51 @@ async def test_unknown_command_and_photo_get_a_hint(harness, mealie_mock):
     )
     await feed(photo)
     assert session.last(SendMessage).text.startswith("Ich verstehe nur Text")
+
+
+# --- two people, two chats ---------------------------------------------------
+
+
+async def test_change_in_one_chat_updates_the_other_chats_live_message(harness, mealie_mock):
+    feed, session = harness
+    route = mock_list(mealie_mock, make_item("i-1", "Milk"))
+    await feed(message("/list", user_id=ALICE))
+    await feed(message("/list", user_id=BOB, language="de"))
+    bob_list = session.next_id
+    route.respond(
+        json={
+            "id": LIST_ID,
+            "name": "Groceries",
+            "listItems": [make_item("i-1", "Milk"), make_item("n-1", "Eggs")],
+        }
+    )
+    mealie_mock.post("/api/households/shopping/items/create-bulk").respond(
+        201, json={"createdItems": [make_item("n-1", "Eggs")]}
+    )
+    await feed(message("eggs", user_id=ALICE, message_id=2))
+    bob = [e for e in session.sent(EditMessageText) if e.message_id == bob_list]
+    assert bob and "2 offen" in bob[-1].text  # Bob's message, in Bob's language
+    assert "Eggs" in buttons(bob[-1])
+
+    # Bob's history later names Alice, since the change was not his own; his
+    # own addition carries no name in his private chat.
+    await feed(message("bread", user_id=BOB, language="de", message_id=3))
+    history = [e for e in session.sent(EditMessageText) if e.message_id == bob_list]
+    assert "· Alice</i> ➕ Eggs" in history[-1].text
+    own = history[-1].text.split("\n")[-1]
+    assert own.endswith("</i> ➕ Eggs") and "·" not in own
+
+
+async def test_list_choice_is_per_chat(harness, mealie_mock):
+    feed, session = harness
+    mealie_mock.get("/api/households/shopping/lists").respond(
+        json={"items": [{"id": LIST_ID, "name": "Groceries"}, {"id": OTHER_LIST_ID, "name": "Z"}]}
+    )
+    mock_list(mealie_mock)
+    mealie_mock.get(f"/api/households/shopping/lists/{OTHER_LIST_ID}").respond(
+        json={"id": OTHER_LIST_ID, "name": "Z", "listItems": []}
+    )
+    await feed(callback(SelectList(list_id=OTHER_LIST_ID).pack(), user_id=ALICE))
+    assert "<b>Z</b>" in session.last(EditMessageText).text
+    await feed(message("/list", user_id=BOB))
+    assert "<b>Groceries</b>" in session.last(SendMessage).text

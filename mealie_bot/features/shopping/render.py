@@ -194,13 +194,28 @@ def progress_bar(done: int, total: int) -> str:
     return "▰" * filled + "▱" * (PROGRESS_CELLS - filled)
 
 
-def _group(items: list[JSON], tr: Translator) -> list[tuple[str, str, list[JSON]]]:
-    """Group open items by label: (label key, label name, items), labels sorted, "Other" last."""
+def _group(
+    items: list[JSON], tr: Translator, label_order: Mapping[str, int] | None = None
+) -> list[tuple[str, str, list[JSON]]]:
+    """Group open items by label: (label key, label name, items).
+
+    Labels follow the order set in Mealie for the list (``label_order``), labels
+    without a position come after them alphabetically, "Other" is last.
+    """
     groups: dict[str, tuple[str, list[JSON]]] = {}
     for item in items:
         key = label_key(item)
         groups.setdefault(key, (label_name(item, tr), []))[1].append(item)
-    ordered = sorted(groups.items(), key=lambda kv: (kv[0] == NO_LABEL, kv[1][0].casefold()))
+    order = label_order or {}
+    ordered = sorted(
+        groups.items(),
+        key=lambda kv: (
+            kv[0] == NO_LABEL,
+            kv[0] not in order,
+            order.get(kv[0], 0),
+            kv[1][0].casefold(),
+        ),
+    )
     return [
         (key, name, sorted(group, key=lambda i: i.get("position") or 0))
         for key, (name, group) in ordered
@@ -222,8 +237,10 @@ def render_list(
     emoji: Mapping[str, str] | None = None,
     lists: list[JSON] | None = None,
     active_id: str = "",
+    label_order: Mapping[str, int] | None = None,
 ) -> tuple[str, InlineKeyboardMarkup]:
-    """Render the list message; ``emoji`` holds ``LABEL_EMOJI`` overrides for categories.
+    """Render the list message; ``emoji`` holds ``LABEL_EMOJI`` overrides for categories,
+    ``label_order`` the category positions from Mealie's list settings.
 
     ``lists`` and ``active_id`` are only needed for the list chooser view.
     """
@@ -275,7 +292,7 @@ def render_list(
         lines.append(_quote(tr("shopping.done_quote"), done_lines, tr))
 
     rows: list[list[InlineKeyboardButton]] = []
-    groups = _group(unchecked, tr)
+    groups = _group(unchecked, tr, label_order)
     # Category headers come out of the same budget as the item buttons.
     budget = MAX_ITEM_BUTTONS - (len(groups) if len(groups) > 1 else 0)
     shown = 0
