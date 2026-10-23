@@ -36,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The progress bar sits on its own line below the status line
+- The progress bar sits on its own line above the status line
   `n open · m done · HH:MM` instead of in front of it.
 - A change made in one chat re-renders the live list messages of the other
   chats on the same list, and is recorded in their histories too; in a private
