@@ -6,11 +6,16 @@ The chat is kept tidy around one *live* list message per chat:
   posted below it since, the list is sent again at the bottom and the old
   message is rewritten into a short history entry (or deleted when nothing
   changed).
-* Button taps edit the message in place and answer with a toast.
-* Bot commands are deleted after they were handled (``DELETE_COMMANDS``), and
-  so are messages that added items (``DELETE_ITEM_MESSAGES``): the history
-  entry already records what was added. A message that failed stays, so the
-  user can fix and resend it.
+* Button taps edit the message in place and answer with a toast. Opening or
+  closing a category re-renders from the items fetched last, without asking
+  Mealie again.
+* Bot commands are deleted before the list is shown (``DELETE_COMMANDS``); the
+  live list is then still the last message and is edited in place. Messages
+  that added items are deleted once Mealie has them (``DELETE_ITEM_MESSAGES``)
+  and the list is sent again below, so the old message can become the history
+  entry that records what was added. A message that failed stays, so the user
+  can fix and resend it, and the error message is deleted the next time the
+  list is shown.
 """
 
 from __future__ import annotations
@@ -20,6 +25,7 @@ import re
 from collections.abc import Callable, Mapping
 from contextlib import suppress
 from datetime import datetime
+from html import escape
 
 from aiogram import Bot, F, Router
 from aiogram.enums import ChatAction
@@ -36,6 +42,7 @@ from mealie_bot.features.shopping.parser import (
 from mealie_bot.features.shopping.render import (
     VIEW_CLEAR,
     VIEW_DONE,
+    VIEW_LISTS,
     VIEW_OPEN,
     ItemAction,
     ListAction,
@@ -45,17 +52,18 @@ from mealie_bot.features.shopping.render import (
     item_display,
     item_inline,
     label_key,
-    list_chooser,
     render_list,
 )
 from mealie_bot.features.shopping.service import (
     AddResult,
+    ListView,
     NoShoppingListError,
     ShoppingService,
 )
 from mealie_bot.features.shopping.state import ChatState, HistoryEvent, render_history
 from mealie_bot.i18n import Translator, command_names
 from mealie_bot.mealie import MealieError, MealieNotFound
+from mealie_bot.mealie.client import JSON
 
 log = logging.getLogger(__name__)
 
@@ -93,6 +101,8 @@ class ShoppingUI:
         self.chats: dict[int, ChatState] = {}
         # Undo data by (chat id, message id); removed once used or superseded.
         self.undo: dict[tuple[int, int], AddResult] = {}
+        # Last fetched list per chat with its fetch time, so toggles need no round trip.
+        self.cache: dict[int, tuple[ListView, datetime]] = {}
 
     def chat(self, chat_id: int) -> ChatState:
         return self.chats.setdefault(chat_id, ChatState())
@@ -100,19 +110,34 @@ class ShoppingUI:
     # --- rendering ----------------------------------------------------------
 
     async def render(
-        self, user_id: int, state: ListState, tr: Translator
+        self, chat_id: int, user_id: int, state: ListState, tr: Translator, cached: bool = False
     ) -> tuple[str, InlineKeyboardMarkup, str]:
+        lists: list[JSON] | None = None
         shopping_list = await self.service.active_list(user_id)
-        data = await self.service.view(shopping_list["id"])
+        if state.view == VIEW_LISTS:
+            lists = await self.service.lists()
+        if cached and chat_id in self.cache and self.cache[chat_id][0].id == shopping_list["id"]:
+            data, now = self.cache[chat_id]
+        else:
+            data, now = await self.service.view(shopping_list["id"]), self.clock()
+            self.cache[chat_id] = (data, now)
         text, markup = render_list(
-            data.name, data.items, state, tr, now=self.clock(), emoji=self.label_emoji
+            data.name,
+            data.items,
+            state,
+            tr,
+            now=now,
+            emoji=self.label_emoji,
+            lists=lists,
+            active_id=shopping_list["id"],
         )
         return text, markup, data.name
 
     async def show(self, message: Message, user_id: int, tr: Translator, state: ListState) -> None:
         """Show the list as the live message: edit it if it is still last, else re-send."""
         chat = self.chat(message.chat.id)
-        text, markup, list_name = await self.render(user_id, state, tr)
+        text, markup, list_name = await self.render(message.chat.id, user_id, state, tr)
+        await self._drop_errors(message, chat)
         if chat.live_message_id is not None and chat.live_is_last:
             with suppress(*_TELEGRAM_ERRORS):
                 await _edit(message.bot, message.chat.id, chat.live_message_id, text, markup)
@@ -127,20 +152,31 @@ class ShoppingUI:
     ) -> None:
         """Turn ``message`` (a bot message) into the live list message."""
         chat = self.chat(message.chat.id)
-        text, markup, list_name = await self.render(user_id, state, tr)
+        text, markup, list_name = await self.render(message.chat.id, user_id, state, tr)
         with suppress(*_TELEGRAM_ERRORS):
             await _edit(message.bot, message.chat.id, message.message_id, text, markup)
         if chat.live_message_id != message.message_id:
             await self._relocate(chat, message, message.message_id, list_name, tr)
         chat.states[message.message_id] = state
 
-    async def refresh(self, message: Message, user_id: int, tr: Translator) -> None:
+    async def refresh(
+        self, message: Message, user_id: int, tr: Translator, cached: bool = False
+    ) -> None:
         """Re-render a list message in place with its own display state."""
         chat = self.chat(message.chat.id)
         state = chat.state_for(message.message_id)
-        text, markup, _ = await self.render(user_id, state, tr)
+        text, markup, _ = await self.render(message.chat.id, user_id, state, tr, cached=cached)
         with suppress(*_TELEGRAM_ERRORS):
             await _edit(message.bot, message.chat.id, message.message_id, text, markup)
+
+    async def _drop_errors(self, message: Message, chat: ChatState) -> None:
+        """Delete the bot's own error messages once the list is shown again."""
+        ids, chat.error_message_ids = chat.error_message_ids, []
+        if message.bot is None:  # pragma: no cover - messages from the dispatcher carry a bot
+            return
+        for message_id in ids:
+            with suppress(*_TELEGRAM_ERRORS):
+                await message.bot.delete_message(message.chat.id, message_id)
 
     async def _relocate(
         self, chat: ChatState, message: Message, new_id: int, list_name: str, tr: Translator
@@ -178,15 +214,22 @@ class ShoppingUI:
         self.chat(chat_id).record(HistoryEvent(kind, user, self.clock(), items, count))
 
     async def tidy(self, message: Message, *, items: bool = False) -> None:
-        """Delete the user's message once it has been handled, if configured.
+        """Delete the user's message if configured, and note whether the list must move.
 
-        Deleting may fail (e.g. in a group where the bot cannot delete others'
-        messages); the message then simply stays.
+        A deleted command leaves the live list as the last message, so it is
+        edited in place. A message that added items always makes the list move
+        down (the old message turns into the history entry), whether or not it
+        could be deleted. Deleting may fail (e.g. in a group where the bot cannot
+        delete others' messages); the message then simply stays.
         """
         enabled = self.delete_item_messages if items else self.delete_commands
+        deleted = False
         if enabled:
             with suppress(*_TELEGRAM_ERRORS):
                 await message.delete()
+                deleted = True
+        if items or not deleted:
+            self.note_message(message)
 
 
 async def _edit(
@@ -226,10 +269,11 @@ def build_router(context: FeatureContext) -> Router:
     async def send_error(target: Message, tr: Translator, exc: Exception) -> None:
         ui.note_message(target)
         if isinstance(exc, NoShoppingListError):
-            await target.answer(tr("error.no_lists"))
+            sent = await target.answer(tr("error.no_lists"))
         else:
             log.warning("Mealie request failed: %s", exc)
-            await target.answer(tr("error.mealie"))
+            sent = await target.answer(tr("error.mealie"))
+        ui.chat(target.chat.id).error_message_ids.append(sent.message_id)
 
     async def toast_error(query: CallbackQuery, tr: Translator, exc: Exception) -> None:
         log.warning("Mealie request failed: %s", exc)
@@ -238,42 +282,38 @@ def build_router(context: FeatureContext) -> Router:
 
     # --- commands -------------------------------------------------------
 
-    @router.message(Command(*command_names("list")))
-    async def cmd_list(message: Message, tr: Translator) -> None:
-        ui.note_message(message)
+    async def show_command(message: Message, tr: Translator, state: ListState) -> None:
+        """Handle a list command: drop the command first so the live list can stay in place."""
+        await ui.tidy(message)
         try:
-            await ui.show(message, _user_id(message), tr, ListState())
+            await ui.show(message, _user_id(message), tr, state)
         except (MealieError, NoShoppingListError) as exc:
             await send_error(message, tr, exc)
-        await ui.tidy(message)
+
+    @router.message(Command(*command_names("list")))
+    async def cmd_list(message: Message, tr: Translator) -> None:
+        await show_command(message, tr, ListState())
 
     @router.message(Command(*command_names("lists")))
     async def cmd_lists(message: Message, tr: Translator) -> None:
-        ui.note_message(message)
         try:
             lists = await service.lists()
-            if not lists:
-                raise NoShoppingListError
-            active = await service.active_list(_user_id(message))
-        except (MealieError, NoShoppingListError) as exc:
+        except MealieError as exc:
+            ui.note_message(message)
             await send_error(message, tr, exc)
-        else:
-            text, markup = list_chooser(lists, active["id"], tr)
-            await message.answer(text, reply_markup=markup)
-        await ui.tidy(message)
+            return
+        if len(lists) == 1:
+            ui.note_message(message)
+            await message.answer(tr("shopping.only_list", list=escape(lists[0].get("name") or "?")))
+            return
+        await show_command(message, tr, ListState(view=VIEW_LISTS))
 
     @router.message(Command(*command_names("clear")))
     async def cmd_clear(message: Message, tr: Translator) -> None:
-        ui.note_message(message)
-        try:
-            await ui.show(message, _user_id(message), tr, ListState(view=VIEW_CLEAR))
-        except (MealieError, NoShoppingListError) as exc:
-            await send_error(message, tr, exc)
-        await ui.tidy(message)
+        await show_command(message, tr, ListState(view=VIEW_CLEAR))
 
     @router.message(F.text & ~F.text.startswith("/"))
     async def add_items(message: Message, tr: Translator) -> None:
-        ui.note_message(message)
         try:
             units = await service.units()
             try:
@@ -285,6 +325,7 @@ def build_router(context: FeatureContext) -> Router:
                 await message.answer(tr("error.too_long", max=exc.limit))
                 return
             if not entries:
+                ui.note_message(message)
                 await message.answer(tr("error.not_understood"))
                 return
             # "typing…" while Mealie is asked; the list follows within a few seconds.
@@ -294,8 +335,12 @@ def build_router(context: FeatureContext) -> Router:
             shopping_list = await service.active_list(_user_id(message))
             result = await service.add_entries(shopping_list["id"], entries)
         except (MealieError, NoShoppingListError) as exc:
+            ui.note_message(message)
             await send_error(message, tr, exc)
             return
+        # The items are in Mealie: the message may go (it is kept whenever
+        # something went wrong above, so it can be resent).
+        await ui.tidy(message, items=True)
         names = [item_inline(item, tr.language) for item in result.items]
         ui.record(message.chat.id, "added", _user_name(message), names)
         state = ListState(
@@ -311,9 +356,6 @@ def build_router(context: FeatureContext) -> Router:
         chat = ui.chat(message.chat.id)
         if chat.live_message_id is not None and result:
             ui.undo[(message.chat.id, chat.live_message_id)] = result
-        # Only now, after the items were added and the list shows them: the
-        # message is kept whenever something went wrong so it can be resent.
-        await ui.tidy(message, items=True)
 
     # --- buttons --------------------------------------------------------
 
@@ -356,10 +398,15 @@ def build_router(context: FeatureContext) -> Router:
             return
         chat = ui.chat(message.chat.id)
         state = chat.state_for(message.message_id)
+        cached = False
         try:
             if action == "toggle":
                 state.toggle(callback_data.arg)
+                cached = True
                 await query.answer()
+            elif action == "refresh":
+                await query.answer(tr("shopping.toast_refreshed"))
+                state.view = VIEW_OPEN
             elif action == "undo":
                 result = ui.undo.pop((message.chat.id, message.message_id), None)
                 if result is None:
@@ -386,7 +433,7 @@ def build_router(context: FeatureContext) -> Router:
                     if callback_data.view in {VIEW_OPEN, VIEW_DONE}
                     else VIEW_OPEN
                 )
-            await ui.refresh(message, query.from_user.id, tr)
+            await ui.refresh(message, query.from_user.id, tr, cached=cached)
         except (MealieError, NoShoppingListError) as exc:
             await toast_error(query, tr, exc)
 

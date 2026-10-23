@@ -33,6 +33,7 @@ _ROW_SIZES = ((10, 3), (18, 2))
 VIEW_OPEN = "open"
 VIEW_DONE = "done"
 VIEW_CLEAR = "clear"  # confirmation before deleting ticked-off items
+VIEW_LISTS = "lists"  # choose the active list
 
 # Key used for items without a label, both in ``ListState.expanded`` and callback data.
 NO_LABEL = "-"
@@ -51,7 +52,8 @@ class ItemAction(CallbackData, prefix="it"):
 
 
 class ListAction(CallbackData, prefix="ls"):
-    # "show" | "new" | "toggle" | "undo" | "clear_ask" | "clear" | "noop"
+    # "show" | "refresh" | "toggle" | "undo" | "clear_ask" | "clear" | "noop"
+    # ("new" may still arrive from messages rendered by older versions)
     action: str
     view: str = VIEW_OPEN
     arg: str = ""  # label id for "toggle"
@@ -219,13 +221,20 @@ def render_list(
     tr: Translator,
     now: datetime | None = None,
     emoji: Mapping[str, str] | None = None,
+    lists: list[JSON] | None = None,
+    active_id: str = "",
 ) -> tuple[str, InlineKeyboardMarkup]:
-    """Render the list message; ``emoji`` holds ``LABEL_EMOJI`` overrides for categories."""
+    """Render the list message; ``emoji`` holds ``LABEL_EMOJI`` overrides for categories.
+
+    ``lists`` and ``active_id`` are only needed for the list chooser view.
+    """
     language = tr.language
     checked = [i for i in items if i.get("checked")]
     unchecked = [i for i in items if not i.get("checked")]
     name = escape(list_name)
 
+    if state.view == VIEW_LISTS:
+        return list_chooser(lists or [], active_id, tr)
     if state.view == VIEW_CLEAR:
         return _render_clear_question(name, checked, tr)
     if state.view == VIEW_DONE:
@@ -309,8 +318,7 @@ def render_list(
         )
         if state.undo
         else InlineKeyboardButton(
-            text=tr("shopping.btn_refresh"),
-            callback_data=ListAction(action="show", view=VIEW_OPEN).pack(),
+            text=tr("shopping.btn_refresh"), callback_data=ListAction(action="refresh").pack()
         ),
         InlineKeyboardButton(
             text=tr("shopping.btn_done", count=len(checked))
@@ -429,6 +437,7 @@ def _pack_rows(
 def list_chooser(
     lists: list[JSON], active_id: str, tr: Translator
 ) -> tuple[str, InlineKeyboardMarkup]:
+    """The list chooser, shown inside the live message; Cancel returns to the list."""
     rows = [
         [
             InlineKeyboardButton(
@@ -439,4 +448,12 @@ def list_chooser(
         ]
         for item in lists
     ]
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text=tr("shopping.btn_cancel"),
+                callback_data=ListAction(action="show", view=VIEW_OPEN).pack(),
+            )
+        ]
+    )
     return tr("shopping.choose_list"), InlineKeyboardMarkup(inline_keyboard=rows)

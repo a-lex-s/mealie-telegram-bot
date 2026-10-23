@@ -91,6 +91,8 @@ MESSAGES: dict[str, str] = {
     "shopping.cleared.one": "🧹 1 Eintrag entfernt",
     "shopping.item_gone": "⚠️ Den Eintrag gibt es nicht mehr, Liste aktualisiert",
     "shopping.choose_list": "📋 <b>Welche Einkaufsliste?</b>",
+    "shopping.only_list": "📋 Es gibt nur die Liste <b>{list}</b>.",
+    "shopping.toast_refreshed": "🔄 Aktualisiert",
     "history.header": "📜 <b>{list}</b>",
     "history.line": "<i>{time} · {user}</i> {what}",
     # Day shown before the time for entries from another day (strftime format).

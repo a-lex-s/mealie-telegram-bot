@@ -40,9 +40,12 @@ class RecordingSession(BaseSession):
         super().__init__()
         self.calls = []
         self.next_id = 100
+        self.fail_deletes = False  # e.g. a group where the bot may not delete messages
 
     async def make_request(self, bot, method, timeout=None):
         self.calls.append(method)
+        if isinstance(method, DeleteMessage) and self.fail_deletes:
+            raise TelegramBadRequest(method, "Bad Request: message can't be deleted")
         if isinstance(method, SendMessage):
             self.next_id += 1
             return Message(
@@ -203,15 +206,7 @@ async def test_item_message_stays_when_delete_is_not_allowed(harness, mealie_moc
     mealie_mock.post("/api/households/shopping/items/create-bulk").respond(
         201, json={"createdItems": [make_item("n-1", "Eggs")]}
     )
-    original = session.make_request
-
-    async def make_request(bot, method, timeout=None):
-        if isinstance(method, DeleteMessage):
-            session.calls.append(method)
-            raise TelegramBadRequest(method, "Bad Request: message can't be deleted")
-        return await original(bot, method, timeout)
-
-    session.make_request = make_request
+    session.fail_deletes = True
     await feed(message("eggs"))
     assert session.sent(DeleteMessage)  # tried, failed quietly
     assert "➕ <b>Added:</b>" in session.last(SendMessage).text
@@ -349,8 +344,22 @@ async def test_toggle_expands_category(harness, mealie_mock):
     assert texts[:2] == ["🥛 Dairy (1) ▸", "📦 Sonstiges (1) ▸"]
 
 
-async def test_second_list_command_replaces_the_old_message(harness, mealie_mock):
+async def test_second_list_command_edits_the_live_message_in_place(harness, mealie_mock):
     feed, session = harness
+    mock_list(mealie_mock, make_item("i-1", "Milk"))
+    await feed(message("/list"))
+    first = session.next_id
+    await feed(message("/list", message_id=2))
+    # The command was deleted, so the live list is still last and is edited in place.
+    assert len(session.sent(SendMessage)) == 1
+    assert session.last(EditMessageText).message_id == first
+    assert first not in [d.message_id for d in session.sent(DeleteMessage)]
+    assert [d.message_id for d in session.sent(DeleteMessage)] == [1, 2]
+
+
+async def test_list_command_resends_when_the_command_could_not_be_deleted(harness, mealie_mock):
+    feed, session = harness
+    session.fail_deletes = True
     mock_list(mealie_mock, make_item("i-1", "Milk"))
     await feed(message("/list"))
     first = session.next_id
@@ -458,12 +467,18 @@ async def test_lists_command_and_selection_turns_into_the_list(harness, mealie_m
             ]
         }
     )
-    await feed(message("/lists"))
-    reply = session.last(SendMessage)
+    mock_list(mealie_mock, make_item("i-1", "Milk"))
+    await feed(message("/list"))
+    live_id = session.next_id
+    await feed(message("/lists", message_id=2))
+    # The chooser is rendered into the live list message.
+    reply = session.last(EditMessageText)
+    assert reply.message_id == live_id
     assert "Which shopping list?" in reply.text
-    assert buttons(reply) == ["Groceries", "Hardware"]
-    assert [b.style for row in reply.reply_markup.inline_keyboard for b in row] == ["primary", None]
-    chooser_id = session.next_id
+    assert buttons(reply) == ["Groceries", "Hardware", "✕ Cancel"]
+    styles = [b.style for row in reply.reply_markup.inline_keyboard for b in row]
+    assert styles == ["primary", None, None]
+    chooser_id = live_id
 
     mealie_mock.get(f"/api/households/shopping/lists/{OTHER_LIST_ID}").respond(
         json={"id": OTHER_LIST_ID, "name": "Hardware", "listItems": [make_item("h-1", "Nails")]}
@@ -477,11 +492,57 @@ async def test_lists_command_and_selection_turns_into_the_list(harness, mealie_m
 # --- errors -----------------------------------------------------------------
 
 
-async def test_mealie_down_reports_error(harness, mealie_mock):
+async def test_mealie_down_reports_error_and_the_error_goes_once_the_list_is_back(
+    harness, mealie_mock
+):
     feed, session = harness
-    mealie_mock.get(LIST_URL).respond(502)
+    route = mealie_mock.get(LIST_URL).respond(502)
     await feed(message("/list"))
-    assert "not reachable" in session.last(SendMessage).text
+    assert (
+        "⚠️" in session.last(SendMessage).text and "not reachable" in session.last(SendMessage).text
+    )
+    error_id = session.next_id
+    route.respond(json={"id": LIST_ID, "name": "Groceries", "listItems": []})
+    await feed(message("/list", message_id=2))
+    assert "🛒" in session.last(SendMessage).text
+    assert error_id in [d.message_id for d in session.sent(DeleteMessage)]
+
+
+async def test_toggle_renders_from_cache_without_asking_mealie(harness, mealie_mock):
+    feed, session = harness
+    route = mock_list(
+        mealie_mock, make_item("i-1", "Milch", label="Dairy"), make_item("i-2", "Soap")
+    )
+    await feed(message("/list"))
+    assert route.call_count == 1
+    await feed(
+        callback(ListAction(action="toggle", arg=NO_LABEL).pack(), message_id=session.next_id)
+    )
+    assert route.call_count == 1  # no new fetch for opening a category
+    assert buttons(session.last(EditMessageText))[2] == "Soap"
+    await feed(callback(ListAction(action="refresh").pack(), message_id=session.next_id))
+    assert route.call_count == 2
+    assert session.last(AnswerCallbackQuery).text == "🔄 Aktualisiert"
+
+
+async def test_lists_command_with_a_single_list_just_says_so(harness, mealie_mock):
+    feed, session = harness
+    mealie_mock.get("/api/households/shopping/lists").respond(
+        json={"items": [{"id": LIST_ID, "name": "Groceries"}]}
+    )
+    await feed(message("/lists"))
+    assert session.last(SendMessage).text == "📋 There is only the list <b>Groceries</b>."
+
+
+async def test_item_message_is_deleted_before_the_list_is_sent(harness, mealie_mock):
+    feed, session = harness
+    mock_list(mealie_mock)
+    mealie_mock.post("/api/households/shopping/items/create-bulk").respond(
+        201, json={"createdItems": [make_item("n-1", "Eggs")]}
+    )
+    await feed(message("eggs"))
+    kinds = [type(c) for c in session.calls if isinstance(c, (DeleteMessage, SendMessage))]
+    assert kinds == [DeleteMessage, SendMessage]
 
 
 async def test_mealie_down_on_tap_shows_alert(harness, mealie_mock):

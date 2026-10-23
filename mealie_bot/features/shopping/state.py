@@ -47,6 +47,8 @@ class ChatState:
     pending: list[HistoryEvent] = field(default_factory=list)
     history_message_id: int | None = None
     history_events: list[HistoryEvent] = field(default_factory=list)
+    # Error messages the bot posted; deleted once the list is shown again.
+    error_message_ids: list[int] = field(default_factory=list)
 
     def state_for(self, message_id: int) -> ListState:
         return self.states.setdefault(message_id, ListState())

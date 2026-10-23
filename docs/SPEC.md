@@ -105,15 +105,17 @@ bot do?") are published per language at start-up (`setMyCommands`,
 `setMyDescription`, `setMyShortDescription`).
 
 With `DELETE_COMMANDS=true` (default) the bot deletes the user's `/list`,
-`/lists` and `/clear` messages after they have been handled, so the chat holds
-the list and the history instead of a trail of commands. `/start` and `/help`
-are never deleted.
+`/lists` and `/clear` messages before it shows the list, so the chat holds
+the list and the history instead of a trail of commands, and the live list
+message (6.4) is still the last message and is edited in place instead of
+being sent again. `/start` and `/help` are never deleted.
 
-With `DELETE_ITEM_MESSAGES=true` (default) a plain text message is deleted once
-its items are on the list (see 6.3); the history entry records what was added.
-A message the bot could not parse or add stays in the chat so the user can fix
-and resend it. If Telegram refuses the deletion (e.g. in a group where the bot
-may not delete others' messages), the message simply stays.
+With `DELETE_ITEM_MESSAGES=true` (default) a plain text message is deleted as
+soon as its items are in Mealie, before the list is shown (see 6.3); the
+history entry records what was added. A message the bot could not parse or add
+stays in the chat so the user can fix and resend it. If Telegram refuses the
+deletion (e.g. in a group where the bot may not delete others' messages), the
+message simply stays and the list is sent again below it.
 
 ### 6.2 Active list
 
@@ -122,8 +124,11 @@ The active list of a user is, in this order: the list the user picked with
 made with `/lists` is kept in memory and resets when the bot restarts. If Mealie
 has no shopping list, the bot says so; it never creates lists.
 
-`/lists` shows one button per list, the active one coloured blue. Choosing a
-list turns that message into the live list message (see 6.4).
+`/lists` renders a chooser into the live list message (6.4): one button per
+list, the active one coloured blue, and **✕ Cancel**, which shows the list
+again. Choosing a list shows that list in the same message. With a single list
+in Mealie there is nothing to choose; the bot just names it
+(`📋 There is only the list <b>Groceries</b>.`).
 
 ### 6.3 Adding items
 
@@ -234,8 +239,11 @@ is shown; the bot edits it in place instead of posting new messages.
   the same button packing, headed `✅ <b>Done</b> · m`; tapping one puts it back
   (toast "🔁 … is open again"). **🛒 Open (n)** switches back, **Remove (m)**
   asks for confirmation.
-* **Refresh** reloads the list. Changes made in Mealie or by the other person
-  show up on refresh or with the next action; there is no push notification.
+* **Refresh** reloads the list and answers with a toast (`🔄 Refreshed`).
+  Changes made in Mealie or by the other person show up on refresh or with the
+  next action; there is no push notification. Opening or closing a category
+  re-renders from the items fetched last, without asking Mealie, so the time
+  in the status line stays that of the last fetch.
 * At most 80 items are shown as buttons (Telegram allows 100 per message); the
   rest is counted in the text.
 * If an item no longer exists when tapped, the bot says so in a toast and refreshes.
@@ -274,7 +282,8 @@ chat grows. The history lives in memory and starts fresh after a restart.
 ### 6.7 Errors
 
 If Mealie cannot be reached or returns an error, the user gets a short message
-("⚠️ Mealie is not reachable right now") for commands and text, or an alert-style
+("⚠️ Mealie is not reachable right now") for commands and text, deleted again
+the next time the list is shown successfully, or an alert-style
 toast for button taps; details go to the log without tokens. Requests that are
 safe to repeat (`GET`, `PUT`, `DELETE`) are retried once after half a second on
 connection errors; `POST` (bulk create) is not, to avoid duplicates. The bot

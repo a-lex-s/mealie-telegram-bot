@@ -30,7 +30,7 @@ screenshots replace them as described in
 [docs/screenshots/README.md](docs/screenshots/README.md). The chat stays
 tidy: there is one live list message that the bot edits in place, taps answer
 with short toasts, and when the list moves down the old message turns into a
-compact history entry (`21:12 · Alice ➕ flour · 500 g, baking powder`).
+compact history entry (`21:12 · Alice ➕ 500 g flour, baking powder`).
 
 ## Quick start
 

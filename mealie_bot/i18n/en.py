@@ -93,6 +93,8 @@ MESSAGES: dict[str, str] = {
     "shopping.item_gone": "⚠️ That item no longer exists, list refreshed",
     # Lists
     "shopping.choose_list": "📋 <b>Which shopping list?</b>",
+    "shopping.only_list": "📋 There is only the list <b>{list}</b>.",
+    "shopping.toast_refreshed": "🔄 Refreshed",
     # History entries (old list messages are rewritten into these)
     "history.header": "📜 <b>{list}</b>",
     "history.line": "<i>{time} · {user}</i> {what}",

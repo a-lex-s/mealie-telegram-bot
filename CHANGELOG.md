@@ -66,6 +66,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the default colour, *Remove* in the control row once everything is bought,
   *Cancel* left of *Yes, remove*, history items written as typed with a date
   for other days, the active list coloured in `/lists`.
+- Less flicker: commands are deleted before the list is shown so the live
+  message is edited in place, item messages are deleted before the list moves
+  down, opening a category needs no Mealie round trip, *Refresh* answers with
+  a toast, `/lists` renders its chooser into the live message with a *Cancel*
+  button (and just names the list when there is only one), and the bot's own
+  error messages are deleted once the list is shown again.
 - Adding items shows the updated list with an "Added" quote and an Undo button
   that deletes the created items and restores merged quantities; toasts for
   button taps and "typing…" while Mealie is asked.

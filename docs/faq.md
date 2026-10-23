@@ -49,13 +49,14 @@ Tap *Refresh* (or any button) or send `/list` again. There are no push
 notifications in version 1.
 
 **Where did my `/list` message go?**
-The bot deletes `/list`, `/lists` and `/clear` after handling them so that only
-the list stays in the chat (`/start` and `/help` stay). Set
-`DELETE_COMMANDS=false` to keep them.
+The bot deletes `/list`, `/lists` and `/clear` right away so that only the
+list stays in the chat, and the list message is then updated in place
+(`/start` and `/help` stay). Set `DELETE_COMMANDS=false` to keep them.
 
 **Where did the items I typed go?**
-Once the items are on the list, the bot deletes your message; the history entry
-records who added what. Messages that failed stay so you can fix and resend
+As soon as the items are in Mealie, the bot deletes your message and sends the
+list again below; the old list message becomes the history entry that records
+who added what. Messages that failed stay so you can fix and resend
 them. Set `DELETE_ITEM_MESSAGES=false` to keep all of them.
 
 **The times in the list are off.**
