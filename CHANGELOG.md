@@ -55,6 +55,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Category buttons stand out: blue header buttons with an emoji per label
   (keyword table in German and English, overridable with `LABEL_EMOJI`),
   green *Done* and red *Undo* / *Remove* buttons.
+- Text polish: singular/plural forms in both languages, consistent emoji in
+  toasts and history (`✅` ticked off, `🔁` put back), German texts address the
+  user as "du", error texts are marked with `⚠️`, the command menu lists the
+  list commands before `/help`.
 - Adding items shows the updated list with an "Added" quote and an Undo button
   that deletes the created items and restores merged quantities; toasts for
   button taps and "typing…" while Mealie is asked.

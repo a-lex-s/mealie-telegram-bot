@@ -56,6 +56,17 @@ def test_resolve_language(code, override, expected):
 
 def test_translator_formats():
     assert "Alice" in Translator("de")("shopping.toast_checked", item="Alice")
+    assert Translator("de")("shopping.cleared", count=1) == "🧹 1 Eintrag entfernt"
+    assert Translator("de")("shopping.cleared", count=2) == "🧹 2 Einträge entfernt"
+    assert Translator("en")("shopping.more", count=1) == "… and 1 more (open Mealie to see all)"
+    # A ".one" variant must exist in every language that has the base key.
+    for language in ("de", "en"):
+        catalog = Translator(language)
+        assert all(
+            key[: -len(".one")] in catalog._messages
+            for key in catalog._messages
+            if key.endswith(".one")
+        )
 
 
 def test_command_names_cover_all_languages():

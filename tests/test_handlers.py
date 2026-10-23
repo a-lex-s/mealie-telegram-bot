@@ -242,7 +242,7 @@ async def test_undo_deletes_created_and_restores_merged_items(harness, mealie_mo
     assert edited.reply_markup.inline_keyboard[-1][0].text == "🔄 Aktualisieren"
 
     await feed(callback(ListAction(action="undo").pack(), message_id=list_message_id))
-    assert "nichts mehr" in session.last(AnswerCallbackQuery).text
+    assert "Nichts mehr" in session.last(AnswerCallbackQuery).text
 
 
 async def test_unparseable_text(harness, mealie_mock):
@@ -403,7 +403,7 @@ async def test_tap_checks_item_toasts_and_refreshes(harness, mealie_mock):
     mock_list(mealie_mock, {**item, "checked": True})
     await feed(callback(ItemAction(action="check", item_id="i-1", view=VIEW_OPEN).pack()))
     assert json.loads(put.calls.last.request.content)["checked"] is True
-    assert session.last(AnswerCallbackQuery).text == "✓ Milch"
+    assert session.last(AnswerCallbackQuery).text == "✅ Milch"
     edited = session.last(EditMessageText)
     assert "Alles gekauft" in edited.text and "<s>Milch</s>" in edited.text
 
@@ -434,7 +434,7 @@ async def test_done_view_uncheck_and_clear_with_confirmation(harness, mealie_moc
     delete = mealie_mock.delete("/api/households/shopping/items").respond(json={})
     await feed(callback(ListAction(action="clear", view=VIEW_OPEN).pack()))
     assert delete.calls.last.request.url.params.get_list("ids") == ["i-1"]
-    assert "1 erledigte" in session.last(AnswerCallbackQuery).text
+    assert session.last(AnswerCallbackQuery).text == "🧹 1 Eintrag entfernt"
 
 
 async def test_clear_command_asks_first(harness, mealie_mock):
@@ -442,7 +442,7 @@ async def test_clear_command_asks_first(harness, mealie_mock):
     mock_list(mealie_mock, make_item("i-1", "Milk", checked=True), make_item("i-2", "Eggs"))
     await feed(message("/clear"))
     reply = session.last(SendMessage)
-    assert "Remove 1 ticked-off items from Groceries?" in reply.text
+    assert "Remove 1 ticked-off item from Groceries?" in reply.text
     assert reply.reply_markup.inline_keyboard[0][1].text == "Cancel"
 
 
@@ -489,7 +489,7 @@ async def test_mealie_down_on_tap_shows_alert(harness, mealie_mock):
     mealie_mock.get("/api/households/shopping/items/i-1").respond(502)
     await feed(callback(ItemAction(action="check", item_id="i-1", view=VIEW_OPEN).pack()))
     toast = session.last(AnswerCallbackQuery)
-    assert toast.show_alert and "nicht erreichbar" in toast.text
+    assert toast.show_alert and "Mealie antwortet nicht" in toast.text
 
 
 async def test_no_lists(harness, mealie_mock):
@@ -515,4 +515,4 @@ async def test_register_commands_publishes_menu_and_description():
     session = RecordingSession()
     await register_commands(Bot("123456:placeholder", session=session), settings(bot_language="de"))
     assert [c.language_code for c in session.sent(SetMyCommands)] == [None]
-    assert session.sent(SetMyCommands)[0].commands[1].command == "liste"
+    assert session.sent(SetMyCommands)[0].commands[0].command == "liste"

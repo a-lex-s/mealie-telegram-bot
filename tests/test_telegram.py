@@ -88,12 +88,12 @@ async def test_dispatcher_builds_with_and_without_features():
 
 def test_menu_commands_localized():
     features = enabled_features(_settings())
-    assert BotCommand(command="liste", description="Einkaufsliste anzeigen") in menu_commands(
+    assert BotCommand(command="liste", description="Liste anzeigen") in menu_commands(
         features, "de"
     )
     assert [c.command for c in menu_commands(features, "en")] == [
-        "help",
         "list",
-        "lists",
         "clear",
+        "lists",
+        "help",
     ]

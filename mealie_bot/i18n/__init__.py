@@ -2,7 +2,8 @@
 
 Each language module (``en``, ``de``, ...) defines three dicts:
 
-* ``MESSAGES``: user-facing texts, formatted with ``str.format``.
+* ``MESSAGES``: user-facing texts, formatted with ``str.format``. A key may have
+  a ``<key>.one`` variant that is used when the ``count`` argument is exactly 1.
 * ``COMMANDS``: command key -> (command name, menu description).
 * ``UNITS``: canonical unit key -> spellings users may type.
 
@@ -37,6 +38,8 @@ class Translator:
         self._messages: dict[str, str] = CATALOGS[self.language].MESSAGES
 
     def __call__(self, key: str, **kwargs: object) -> str:
+        if kwargs.get("count") == 1 and f"{key}.one" in self._messages:
+            key = f"{key}.one"
         template = self._messages.get(key) or en.MESSAGES[key]
         return template.format(**kwargs) if kwargs else template
 

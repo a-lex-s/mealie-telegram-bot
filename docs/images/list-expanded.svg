@@ -21,5 +21,5 @@
 <rect x="16.0" y="438" width="320.0" height="34" rx="8" fill="#2a7fcf"/><text x="176.0" y="460" font-size="13" text-anchor="middle" fill="#fff">📦 Other · 1 ▸</text>
 <rect x="16.0" y="478" width="157.0" height="34" rx="8" fill="#eaf3fb"/><text x="94.5" y="500" font-size="13" text-anchor="middle" fill="#2a7fcf">🔄 Refresh</text>
 <rect x="179.0" y="478" width="157.0" height="34" rx="8" fill="#2f9e5f"/><text x="257.5" y="500" font-size="13" text-anchor="middle" fill="#fff">✅ Done (3)</text>
-<rect x="60" y="518" width="240" height="30" rx="10" fill="#222" opacity="0.85"/><text x="180" y="538" font-size="12" text-anchor="middle" fill="#fff">✓ milk · 2 l</text>
+<rect x="60" y="518" width="240" height="30" rx="10" fill="#222" opacity="0.85"/><text x="180" y="538" font-size="12" text-anchor="middle" fill="#fff">✅ milk · 2 l</text>
 </svg>

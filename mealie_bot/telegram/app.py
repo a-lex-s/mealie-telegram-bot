@@ -66,7 +66,8 @@ def build_dispatcher(settings: Settings, mealie: MealieClient) -> Dispatcher:
 
 
 def menu_commands(features: list[Feature], language: str) -> list[BotCommand]:
-    keys = ["help", *(key for feature in features for key in feature.commands)]
+    # Most used first: the features' own commands, then help.
+    keys = [*(key for feature in features for key in feature.commands), "help"]
     catalog = CATALOGS[language].COMMANDS
     return [BotCommand(command=catalog[key][0], description=catalog[key][1]) for key in keys]
 

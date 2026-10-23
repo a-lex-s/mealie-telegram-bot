@@ -57,4 +57,4 @@ def test_render_history_lines_and_truncation():
     assert lines[1].startswith("<i>21:00 · Alice</i> ➕ item 0, ")
     assert lines[1].endswith(f", item {MAX_HISTORY_ITEMS - 1}, +2")
     assert lines[2] == "<i>21:05 · Bob</i> ✅ Milk &lt;b&gt;"
-    assert lines[3] == "<i>21:09 · Alice</i> 🧹 3 entfernt"
+    assert lines[3] == "<i>21:09 · Alice</i> 🧹 3 Einträge entfernt"

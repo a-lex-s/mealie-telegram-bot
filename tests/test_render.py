@@ -116,7 +116,7 @@ def test_clear_question_without_checked_items_falls_back_to_done_view():
 def test_empty_list_and_escaping():
     text, _ = render_list("<b>&", [], ListState(), DE)
     assert "&lt;b&gt;&amp;" in text
-    assert "Nichts zu kaufen" in text
+    assert "Die Liste ist leer" in text
     text, _ = render_list("G", [make_item("1", "x", checked=True)], ListState(), DE)
     assert "Alles gekauft" in text and "▰▰▰▰▰▰▰▰▰▰" in text
 

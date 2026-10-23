@@ -233,7 +233,7 @@ def build_router(context: FeatureContext) -> Router:
     async def toast_error(query: CallbackQuery, tr: Translator, exc: Exception) -> None:
         log.warning("Mealie request failed: %s", exc)
         with suppress(*_TELEGRAM_ERRORS):
-            await query.answer(tr("error.mealie"), show_alert=True)
+            await query.answer(tr("error.mealie_toast"), show_alert=True)
 
     # --- commands -------------------------------------------------------
 

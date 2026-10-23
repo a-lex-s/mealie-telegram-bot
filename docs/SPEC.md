@@ -79,6 +79,9 @@ Mealie as done by that user. Its household determines which lists are visible.
   messages, command names with menu descriptions, and unit synonyms.
 * English is the default and reference catalog; German is complete. Tests fail
   if a catalog misses a key or uses different placeholders.
+* A key may have a `<key>.one` variant that is used when the `count` argument
+  is exactly 1 (`1 item removed` / `3 items removed`).
+* The German catalog addresses the user informally and in the singular (du).
 * Language per user comes from Telegram's `language_code` (`de-AT` → `de`);
   unknown languages fall back to English. `BOT_LANGUAGE` overrides it for all users.
 * Commands are registered in the Telegram menu per language. Every spelling of a
@@ -96,7 +99,8 @@ Mealie as done by that user. Its household determines which lists are visible.
 | lists | `/lists` | `/listen` | Choose the active list |
 | clear | `/clear` | `/aufraeumen` | Delete all ticked-off items of the active list, after confirmation |
 
-The command menu, the bot description and the short description ("What can this
+The command menu lists the feature commands first (`/list`, `/clear`, `/lists`)
+and `/help` last. It, the bot description and the short description ("What can this
 bot do?") are published per language at start-up (`setMyCommands`,
 `setMyDescription`, `setMyShortDescription`).
 
@@ -193,8 +197,8 @@ is shown; the bot edits it in place instead of posting new messages.
 * Text: `🛒 <b>list</b>`, a progress bar in monospace (`▰▰▰▱▱▱▱▱▱▱`, ten cells,
   ticked-off share of all items) with `n open · m done`, an expandable quote
   **Done (m)** with the ticked-off items struck through, and `<i>As of HH:MM</i>`
-  (container local time). Empty list: "Nothing to buy. 🎉"; everything ticked
-  off: "Everything bought. 🎉".
+  (container local time). Empty list: "The list is empty."; everything ticked
+  off: "🎉 All bought.".
 * Keyboard: one header button per label (`🧂 Label · n ▸` collapsed,
   `🧂 Label · n ▾` expanded), labels alphabetical with unlabelled items last as
   "Other". All categories start collapsed; tapping a header toggles it for that
@@ -214,11 +218,10 @@ is shown; the bot edits it in place instead of posting new messages.
   (`Mehl · 500 g`; quantity 1 without unit is omitted). Short names share a
   row (up to three of at most 10 characters, two of at most 18 characters),
   longer names get their own row. Items without a food use their note as name.
-* Tapping an item ticks it off in Mealie, answers with a toast (`✓ Mehl · 500 g`)
+* Tapping an item ticks it off in Mealie, answers with a toast (`✅ Mehl · 500 g`)
   and refreshes the message in place.
 * **Done (m)** switches the message to the ticked-off items (newest first), with
-  the same button packing; tapping one puts it back (toast "… is back on the
-  list"). **Open (n)** switches back, **Remove (m)** asks for confirmation.
+  the same button packing; tapping one puts it back (toast "🔁 … is open again"). **Open (n)** switches back, **Remove (m)** asks for confirmation.
 * **Refresh** reloads the list. Changes made in Mealie or by the other person
   show up on refresh or with the next action; there is no push notification.
 * At most 80 items are shown as buttons (Telegram allows 100 per message); the
@@ -241,8 +244,8 @@ is not simply deleted:
 * If anything changed since the last history entry (items added, ticked off,
   put back, removed or undone), the old message is rewritten into a compact
   history entry: `<i>📜 list</i>` followed by one line per change,
-  `<i>HH:MM · first name</i> ➕ items` (`✅` ticked off, `↩️` put back,
-  `🧹 n removed`, `↩️ n undone`). Consecutive changes of the same kind by the
+  `<i>HH:MM · first name</i> ➕ items` (`✅` ticked off, `🔁` put back,
+  `🧹 n items removed`, `↩️ n items undone`). Consecutive changes of the same kind by the
   same person are merged into one line; at most 8 item names are listed per
   line and 12 lines per entry.
 * If the previous history entry is less than 15 minutes old, the new changes
@@ -255,7 +258,7 @@ chat grows. The history lives in memory and starts fresh after a restart.
 ### 6.7 Errors
 
 If Mealie cannot be reached or returns an error, the user gets a short message
-("Mealie is not reachable right now") for commands and text, or an alert-style
+("⚠️ Mealie is not reachable right now") for commands and text, or an alert-style
 toast for button taps; details go to the log without tokens. Requests that are
 safe to repeat (`GET`, `PUT`, `DELETE`) are retried once after half a second on
 connection errors; `POST` (bulk create) is not, to avoid duplicates. The bot
