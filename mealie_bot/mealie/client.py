@@ -66,7 +66,11 @@ class MealieClient:
             )
         if not response.content:
             return None
-        return response.json()
+        try:
+            return response.json()
+        except ValueError:
+            # Not JSON: e.g. a maintenance page from a reverse proxy in front of Mealie.
+            raise MealieError(f"{method} {path}: unexpected response body") from None
 
     async def _request_json(self, method: str, path: str, **kwargs: Any) -> JSON:
         data = await self._request(method, path, **kwargs)
@@ -95,7 +99,7 @@ class MealieClient:
     # --- shopping lists ---------------------------------------------------
 
     async def get_shopping_lists(self) -> list[JSON]:
-        data = await self._request(
+        data = await self._request_json(
             "GET",
             "/api/households/shopping/lists",
             params={"perPage": -1, "orderBy": "name", "orderDirection": "asc"},
@@ -132,9 +136,9 @@ class MealieClient:
     # --- foods / units ----------------------------------------------------
 
     async def get_foods(self) -> list[JSON]:
-        data = await self._request("GET", "/api/foods", params={"perPage": -1})
+        data = await self._request_json("GET", "/api/foods", params={"perPage": -1})
         return list(data.get("items", []))
 
     async def get_units(self) -> list[JSON]:
-        data = await self._request("GET", "/api/units", params={"perPage": -1})
+        data = await self._request_json("GET", "/api/units", params={"perPage": -1})
         return list(data.get("items", []))

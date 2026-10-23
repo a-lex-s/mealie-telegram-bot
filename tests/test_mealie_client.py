@@ -66,10 +66,33 @@ async def test_unexpected_body_is_an_error(client, mealie_mock):
         await client.get_self()
 
 
-async def test_empty_body_is_an_error_for_json_endpoints(client, mealie_mock):
-    mealie_mock.get("/api/users/self").respond(204)
+@pytest.mark.parametrize("path", ["/api/users/self", "/api/households/shopping/lists"])
+async def test_empty_body_is_an_error_for_json_endpoints(client, mealie_mock, path):
+    mealie_mock.get(path).respond(204)
     with pytest.raises(MealieError):
-        await client.get_self()
+        await client._request_json("GET", path)
+
+
+async def test_html_body_is_an_error(client, mealie_mock):
+    # A reverse proxy in front of Mealie may answer 200 with a maintenance page.
+    mealie_mock.get("/api/units").respond(200, text="<html>maintenance</html>")
+    with pytest.raises(MealieError, match="unexpected response body"):
+        await client.get_units()
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda c: c.get_shopping_lists(),
+        lambda c: c.get_foods(),
+        lambda c: c.get_units(),
+    ],
+)
+async def test_list_endpoints_reject_empty_bodies(client, mealie_mock, call):
+    for path in ("/api/households/shopping/lists", "/api/foods", "/api/units"):
+        mealie_mock.get(path).respond(204)
+    with pytest.raises(MealieError):
+        await call(client)
 
 
 async def test_idempotent_requests_are_retried_once(client, mealie_mock, monkeypatch):

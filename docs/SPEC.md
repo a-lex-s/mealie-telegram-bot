@@ -244,8 +244,10 @@ is shown; the bot edits it in place instead of posting new messages.
   next action; there is no push notification. Opening or closing a category
   re-renders from the items fetched last, without asking Mealie, so the time
   in the status line stays that of the last fetch.
-* At most 80 items are shown as buttons (Telegram allows 100 per message); the
-  rest is counted in the text.
+* Item buttons and category headers share a budget of 80 buttons (Telegram
+  allows 100 per message); items beyond it are counted in the text. Quotes
+  (*Added*, *Done*, the removal question) list at most 20 items and count the
+  rest, so the message stays below Telegram's 4096 characters.
 * If an item no longer exists when tapped, the bot says so in a toast and refreshes.
 
 ### 6.5 Removing ticked-off items
@@ -281,10 +283,13 @@ chat grows. The history lives in memory and starts fresh after a restart.
 
 ### 6.7 Errors
 
-If Mealie cannot be reached or returns an error, the user gets a short message
-("⚠️ Mealie is not reachable right now") for commands and text, deleted again
-the next time the list is shown successfully, or an alert-style
-toast for button taps; details go to the log without tokens. Requests that are
+If Mealie cannot be reached, returns an error or answers with something that is
+not JSON (for example a maintenance page from a reverse proxy), the user gets a
+short message ("⚠️ Mealie is not reachable right now") for commands and text,
+deleted again the next time the list is shown successfully, or an alert-style
+toast for button taps; details go to the log without tokens. If Telegram
+rejects the list message itself, the user is told so instead of getting no
+answer. Requests that are
 safe to repeat (`GET`, `PUT`, `DELETE`) are retried once after half a second on
 connection errors; `POST` (bulk create) is not, to avoid duplicates. The bot
 starts even if Mealie is down and retries with each user action.

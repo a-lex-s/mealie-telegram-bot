@@ -22,10 +22,13 @@ from mealie_bot.i18n import Translator
 from mealie_bot.i18n.labels import label_emoji
 from mealie_bot.mealie.client import JSON
 
-# Telegram allows 100 buttons per keyboard; keep room for headers and controls.
+# Telegram allows 100 buttons per keyboard; item buttons and category headers share
+# this budget, the rest is room for the control row.
 MAX_ITEM_BUTTONS = 80
 # Telegram ellipsises long button texts itself; cut earlier so our "…" lands after the name.
 MAX_BUTTON_TEXT = 40
+# Telegram messages hold 4096 characters; quotes list at most this many items.
+MAX_QUOTE_ITEMS = 20
 PROGRESS_CELLS = 10
 # Buttons in one row share its width equally, so short names are packed together.
 _ROW_SIZES = ((10, 3), (18, 2))
@@ -182,6 +185,14 @@ def _truncate(text: str) -> str:
     return text if len(text) <= MAX_BUTTON_TEXT else text[: MAX_BUTTON_TEXT - 1] + "…"
 
 
+def _quote(header: str, lines: list[str], tr: Translator) -> str:
+    """An expandable quote with at most MAX_QUOTE_ITEMS lines; the rest is counted."""
+    shown = lines[:MAX_QUOTE_ITEMS]
+    if len(lines) > MAX_QUOTE_ITEMS:
+        shown.append(tr("shopping.more", count=len(lines) - MAX_QUOTE_ITEMS))
+    return "<blockquote expandable>" + header + "\n" + "\n".join(shown) + "</blockquote>"
+
+
 # --- text -----------------------------------------------------------------
 
 
@@ -269,24 +280,16 @@ def render_list(
             lines.append(tr("shopping.added_one", item=added_lines[0]))
         else:
             lines.append(
-                "<blockquote expandable>"
-                + tr("shopping.added_header", count=len(added_lines))
-                + "\n"
-                + "\n".join(added_lines)
-                + "</blockquote>"
+                _quote(tr("shopping.added_header", count=len(added_lines)), added_lines, tr)
             )
     if checked:
         done_lines = [f"<s>{escape(item_display(i, language))}</s>" for i in checked]
-        lines.append(
-            "<blockquote expandable>"
-            + tr("shopping.done_quote")
-            + "\n"
-            + "\n".join(done_lines)
-            + "</blockquote>"
-        )
+        lines.append(_quote(tr("shopping.done_quote"), done_lines, tr))
 
     rows: list[list[InlineKeyboardButton]] = []
     groups = _group(unchecked, tr)
+    # Category headers come out of the same budget as the item buttons.
+    budget = MAX_ITEM_BUTTONS - (len(groups) if len(groups) > 1 else 0)
     shown = 0
     hidden = 0
     for key, group_name, group in groups:
@@ -303,7 +306,7 @@ def render_list(
             )
         if not expanded:
             continue
-        room = MAX_ITEM_BUTTONS - shown
+        room = max(budget - shown, 0)
         visible, rest = group[:room], group[room:]
         hidden += len(rest)
         shown += len(visible)
@@ -372,10 +375,14 @@ def _render_clear_question(
 ) -> tuple[str, InlineKeyboardMarkup]:
     if not checked:
         return _render_done(name, [], [], tr)
-    quote = "\n".join(f"<s>{escape(item_display(i, tr.language))}</s>" for i in checked)
+    struck = [f"<s>{escape(item_display(i, tr.language))}</s>" for i in checked[:MAX_QUOTE_ITEMS]]
+    if len(checked) > MAX_QUOTE_ITEMS:
+        struck.append(tr("shopping.more", count=len(checked) - MAX_QUOTE_ITEMS))
     text = (
         tr("shopping.clear_question", count=len(checked))
-        + f"\n<blockquote expandable>{quote}</blockquote>\n"
+        + "\n<blockquote expandable>"
+        + "\n".join(struck)
+        + "</blockquote>\n"
         + tr("shopping.clear_hint")
     )
     # Cancel left, the destructive confirmation right, as in Telegram's own dialogs.

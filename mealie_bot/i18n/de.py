@@ -55,6 +55,10 @@ MESSAGES: dict[str, str] = {
     ),
     "error.too_many": "⚠️ Das sind mehr als {max} Einträge in einer Nachricht. Bitte aufteilen.",
     "error.too_long": "⚠️ Ein Eintrag ist länger als {max} Zeichen. Bitte kürzen.",
+    "error.telegram": (
+        "⚠️ Telegram hat die Listennachricht nicht angenommen. "
+        "Bitte noch einmal versuchen oder in Mealie nachsehen."
+    ),
     "shopping.list_header": "🛒 <b>{list}</b>",
     "shopping.count_open": "{count} offen",
     "shopping.count_done": "{count} erledigt",

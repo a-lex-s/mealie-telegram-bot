@@ -3,6 +3,7 @@ from datetime import datetime
 from mealie_bot.features.shopping.parser import ParsedEntry
 from mealie_bot.features.shopping.render import (
     MAX_ITEM_BUTTONS,
+    MAX_QUOTE_ITEMS,
     NO_LABEL,
     VIEW_CLEAR,
     VIEW_DONE,
@@ -129,6 +130,25 @@ def test_long_lists_are_capped():
     text, markup = render_list("L", items, ListState(), EN)
     assert "5 more" in text
     assert sum(len(row) for row in markup.inline_keyboard) <= 100
+
+
+def test_category_headers_count_against_the_button_limit():
+    items = [make_item(str(i), f"item {i}", label=f"Label {i % 30}") for i in range(90)]
+    state = ListState(expanded={f"l-Label {i}" for i in range(30)})
+    text, markup = render_list("L", items, state, EN)
+    assert sum(len(row) for row in markup.inline_keyboard) <= 100
+    assert "40 more" in text  # 80 - 30 headers = 50 items shown
+
+
+def test_long_quotes_are_capped_to_fit_a_message():
+    items = [make_item(str(i), f"Some item number {i}", checked=True) for i in range(300)]
+    added = [make_item(f"a{i}", f"Added item number {i}") for i in range(100)]
+    text, _ = render_list("L", [*items, *added], ListState(added=added), EN)
+    assert len(text) < 4096
+    assert text.count("<s>") == MAX_QUOTE_ITEMS
+    assert f"{300 - MAX_QUOTE_ITEMS} more" in text and f"{100 - MAX_QUOTE_ITEMS} more" in text
+    text, _ = render_list("L", items, ListState(view=VIEW_CLEAR), DE)
+    assert len(text) < 4096 and f"{300 - MAX_QUOTE_ITEMS} weitere" in text
 
 
 def test_callback_data_fits_telegram_limit():

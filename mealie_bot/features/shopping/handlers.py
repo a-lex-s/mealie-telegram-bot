@@ -78,6 +78,10 @@ def valid_id(value: str) -> bool:
     return bool(_SAFE_ID.match(value))
 
 
+# Everything that can go wrong while showing the list and deserves a reply.
+_SHOW_ERRORS = (MealieError, NoShoppingListError, *_TELEGRAM_ERRORS)
+
+
 def _local_now() -> datetime:
     return datetime.now().astimezone()
 
@@ -270,6 +274,10 @@ def build_router(context: FeatureContext) -> Router:
         ui.note_message(target)
         if isinstance(exc, NoShoppingListError):
             sent = await target.answer(tr("error.no_lists"))
+        elif isinstance(exc, _TELEGRAM_ERRORS):
+            # The list message itself was rejected (too long, too many buttons, ...).
+            log.warning("Telegram rejected the list message: %s", exc)
+            sent = await target.answer(tr("error.telegram"))
         else:
             log.warning("Mealie request failed: %s", exc)
             sent = await target.answer(tr("error.mealie"))
@@ -287,7 +295,7 @@ def build_router(context: FeatureContext) -> Router:
         await ui.tidy(message)
         try:
             await ui.show(message, _user_id(message), tr, state)
-        except (MealieError, NoShoppingListError) as exc:
+        except _SHOW_ERRORS as exc:
             await send_error(message, tr, exc)
 
     @router.message(Command(*command_names("list")))
@@ -350,7 +358,7 @@ def build_router(context: FeatureContext) -> Router:
         )
         try:
             await ui.show(message, _user_id(message), tr, state)
-        except (MealieError, NoShoppingListError) as exc:
+        except _SHOW_ERRORS as exc:
             await send_error(message, tr, exc)
             return
         chat = ui.chat(message.chat.id)

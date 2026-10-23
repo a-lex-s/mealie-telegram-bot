@@ -54,6 +54,15 @@ def test_resolve_language(code, override, expected):
     assert resolve_language(code, override) == expected
 
 
+@pytest.mark.parametrize("language", list(CATALOGS))
+def test_every_message_formats_with_its_placeholders(language):
+    tr = Translator(language)
+    commands = {key: tr.command(key) for key in CATALOGS[language].COMMANDS}
+    for key, text in CATALOGS[language].MESSAGES.items():
+        kwargs = {name: commands.get(name, "x") for name in PLACEHOLDER.findall(text)}
+        assert tr(key, **kwargs)
+
+
 def test_translator_formats():
     assert "Alice" in Translator("de")("shopping.toast_checked", item="Alice")
     assert Translator("de")("shopping.cleared", count=1) == "🧹 1 Eintrag entfernt"

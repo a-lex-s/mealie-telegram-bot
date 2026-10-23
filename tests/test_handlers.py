@@ -149,6 +149,25 @@ def callback(data, user_id=ALICE, message_id=5, language="de"):
     )
 
 
+# --- start and help ---------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("command", "language", "expected"),
+    [
+        ("/start", "en", "/list shows the list"),
+        ("/start", "de", "/liste zeigt die Liste"),
+        ("/help", "en", "/lists switches"),
+        ("/help", "de", "/listen wechselt"),
+        ("/hilfe", "de", "/aufraeumen entfernt"),
+    ],
+)
+async def test_start_and_help_render_with_localized_commands(harness, command, language, expected):
+    feed, session = harness
+    await feed(message(command, language=language))
+    assert expected in session.last(SendMessage).text
+
+
 # --- adding items -----------------------------------------------------------
 
 
@@ -543,6 +562,28 @@ async def test_item_message_is_deleted_before_the_list_is_sent(harness, mealie_m
     await feed(message("eggs"))
     kinds = [type(c) for c in session.calls if isinstance(c, (DeleteMessage, SendMessage))]
     assert kinds == [DeleteMessage, SendMessage]
+
+
+async def test_mealie_answering_html_reports_error(harness, mealie_mock):
+    mealie_mock.get(LIST_URL).respond(200, text="<html>maintenance</html>")
+    feed, session = harness
+    await feed(message("/list"))
+    assert "not reachable" in session.last(SendMessage).text
+
+
+async def test_telegram_rejecting_the_list_reports_error(harness, mealie_mock):
+    feed, session = harness
+    mock_list(mealie_mock, make_item("i-1", "Milk"))
+    original = session.make_request
+
+    async def make_request(bot, method, timeout=None):
+        if isinstance(method, SendMessage) and method.text.startswith("🛒"):
+            raise TelegramBadRequest(method, "Bad Request: message is too long")
+        return await original(bot, method, timeout)
+
+    session.make_request = make_request
+    await feed(message("/list"))
+    assert "did not accept" in session.last(SendMessage).text
 
 
 async def test_mealie_down_on_tap_shows_alert(harness, mealie_mock):

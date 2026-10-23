@@ -51,7 +51,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   added, ticked off or removed what, grouped by 15 minutes).
 - List message with progress bar, collapsible categories, short names packed
   into shared button rows, `name · quantity` labels, ticked-off items in an
-  expandable quote and an "as of" time (`TZ`).
+  expandable quote (at most 20 listed, the rest counted) and an "as of" time
+  (`TZ`); category headers and item buttons share the 80-button budget so the
+  keyboard stays within Telegram's limits.
+- Robust error replies: Mealie answers that are not JSON and list messages
+  that Telegram rejects both end in a short message instead of silence.
 - Category buttons stand out: blue header buttons with an emoji per label
   (keyword table in German and English, overridable with `LABEL_EMOJI`),
   green *Done* and red *Undo* / *Remove* buttons.
