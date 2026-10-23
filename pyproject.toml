@@ -13,6 +13,15 @@ dependencies = [
   "pydantic>=2.4.1,<2.14",
 ]
 
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+# Only ship the bot package. Without this, setuptools scans the repository root and
+# refuses to build when an extra directory such as `secrets/` exists next to it.
+[tool.setuptools.packages.find]
+include = ["mealie_bot*"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"

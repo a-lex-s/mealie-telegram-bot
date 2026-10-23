@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `pip install -e .` no longer fails with "Multiple top-level packages" when a
+  `secrets/` directory exists in the checkout; packaging is limited to
+  `mealie_bot`.
 - *Undo* keeps its data when Mealie is unreachable, so the tap can be repeated.
 - Old list messages that Telegram no longer lets the bot delete (after 48
   hours) are rewritten into a stub without buttons instead of lingering.

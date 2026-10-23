@@ -30,6 +30,10 @@ pip install --require-hashes -r requirements-dev.txt
 pip install pre-commit && pre-commit install
 ```
 
+The tests and `python -m mealie_bot` run from the repository root without
+installing the package. `pip install -e .` works as well; it only picks up
+`mealie_bot`, so a local `secrets/` directory does not get in the way.
+
 The ruff and zizmor hooks run the versions from `requirements-dev.txt` inside
 the virtual environment, so pre-commit and CI always agree. gitleaks is the
 only hook with its own pin; it must match `GITLEAKS_VERSION` in
