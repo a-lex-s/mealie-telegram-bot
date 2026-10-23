@@ -42,7 +42,7 @@ Docker with Compose, and a Telegram account.
 1. **Create a bot**: talk to [@BotFather](https://t.me/BotFather), send
    `/newbot` and note the token. Optionally give the bot a profile picture
    with `/setuserpic` and the one from
-   [docs/images/bot-avatar.png](docs/images/bot-avatar.png).
+   [docs/avatar/bot-avatar.png](docs/avatar/bot-avatar.png).
 2. **Create a Mealie API token**: in Mealie, open the profile of the user the bot
    should act as and create a long-lived token under *API tokens*. A dedicated
    Mealie user for the bot keeps things tidy.

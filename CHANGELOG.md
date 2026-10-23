@@ -52,7 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Profile picture for the bot (`docs/images/bot-avatar.svg`, PNG export for
+- Profile picture for the bot (`docs/avatar/bot-avatar.svg`, PNG export for
   BotFather's `/setuserpic`).
 - Shopping list helper: add items by message, list and tick off items with
   inline buttons, choose a list, remove ticked-off items after confirmation.

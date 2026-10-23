@@ -1,11 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="640" height="640">
-  <defs>
-    <radialGradient id="bg" cx="40%" cy="30%" r="90%">
-      <stop offset="0" stop-color="#1e9c8c"/>
-      <stop offset="1" stop-color="#0d5a52"/>
-    </radialGradient>
-  </defs>
-  <rect width="640" height="640" fill="url(#bg)"/>
+  <rect width="640" height="640" fill="#15827a"/>
   <!-- leafy green behind bag -->
   <path d="M430 250 Q450 150 530 125 Q535 215 465 262 Z" fill="#6cc24a"/>
   <path d="M425 255 Q395 165 440 100 Q490 165 460 258 Z" fill="#4caf50"/>
