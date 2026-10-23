@@ -54,6 +54,7 @@ from mealie_bot.features.shopping.render import (
     item_inline,
     label_key,
     render_list,
+    toast_text,
 )
 from mealie_bot.features.shopping.service import ListView, NoShoppingListError, ShoppingService
 from mealie_bot.features.shopping.state import ChatState, HistoryEvent, render_history
@@ -210,14 +211,29 @@ class ShoppingUI:
             # Nothing recent to extend: the old list message itself becomes the entry.
             chat.history_message_id = old_id
         else:
-            with suppress(*_TELEGRAM_ERRORS):
-                await message.bot.delete_message(message.chat.id, old_id)
+            await self._remove(message.bot, message.chat.id, old_id, list_name, tr)
         if events and chat.history_message_id is not None:
             with suppress(*_TELEGRAM_ERRORS):
                 await message.bot.edit_message_text(
                     render_history(list_name, events, tr, today=self.clock().date()),
                     chat_id=message.chat.id,
                     message_id=chat.history_message_id,
+                )
+
+    async def _remove(
+        self, bot: Bot, chat_id: int, message_id: int, list_name: str, tr: Translator
+    ) -> None:
+        """Delete an old list message. Telegram allows that for 48 hours only; after
+        that the message is rewritten into a stub without buttons instead."""
+        try:
+            await bot.delete_message(chat_id, message_id)
+        except _TELEGRAM_ERRORS as exc:
+            log.info("Could not delete message %s, rewriting it: %s", message_id, exc)
+            with suppress(*_TELEGRAM_ERRORS):
+                await bot.edit_message_text(
+                    tr("history.superseded", list=escape(list_name)),
+                    chat_id=chat_id,
+                    message_id=message_id,
                 )
 
     # --- bookkeeping --------------------------------------------------------
@@ -410,9 +426,8 @@ def build_router(context: FeatureContext) -> Router:
                 _user_name(query),
                 [item_inline(item, tr.language)],
             )
-            await query.answer(
-                tr("shopping.toast_checked" if checked else "shopping.toast_unchecked", item=name)
-            )
+            key = "shopping.toast_checked" if checked else "shopping.toast_unchecked"
+            await query.answer(toast_text(tr(key, item=name)))
         try:
             await ui.refresh(message, query.from_user.id, tr)
         except (MealieError, NoShoppingListError) as exc:
@@ -447,13 +462,17 @@ def build_router(context: FeatureContext) -> Router:
                 await query.answer(tr("shopping.toast_refreshed"))
                 state.view = VIEW_OPEN
             elif action == "undo":
-                result, state.undo, state.added = state.undo, None, []
-                if result is None:
+                if state.undo is None:
                     await query.answer(tr("shopping.toast_nothing_to_undo"))
                 else:
-                    count = await service.undo_add(result)
+                    # Keep the undo data until Mealie confirmed, so a failed
+                    # attempt (Mealie down) can be repeated.
+                    created_ids = [item["id"] for item in state.undo.created]
+                    count = await service.undo_add(created_ids, state.undo.previous)
                     ui.record(message.chat.id, "undone", _user_name(query), [], count)
                     await query.answer(tr("shopping.toast_undone", count=count))
+                state.undo = None
+                state.added = []
             elif action == "clear":
                 list_id = await ui.list_id(query.from_user.id, state)
                 removed = await service.clear_checked(list_id)

@@ -176,7 +176,7 @@ async def test_undo_add(service, mealie_mock):
     delete = mealie_mock.delete("/api/households/shopping/items").respond(json={})
     put = mealie_mock.put("/api/households/shopping/items/old").respond(json={})
     result = AddResult(created=[make_item("new", "b")], updated=[previous], previous=[previous])
-    assert await service.undo_add(result) == 2
+    assert await service.undo_add([i["id"] for i in result.created], result.previous) == 2
     assert delete.calls.last.request.url.params.get_list("ids") == ["new"]
     body = json.loads(put.calls.last.request.content)
     assert body["quantity"] == 1 and "groupId" not in body

@@ -59,6 +59,8 @@ MESSAGES: dict[str, str] = {
     "error.telegram": (
         "⚠️ Telegram did not accept the list message. Please try again or open Mealie."
     ),
+    "error.only_text": "I only understand text. Send the items as a message, or /help.",
+    "error.unknown_command": "I do not know that command. /help lists what I can do.",
     # List message
     "shopping.list_header": "🛒 <b>{list}</b>",
     "shopping.count_open": "{count} open",
@@ -103,6 +105,8 @@ MESSAGES: dict[str, str] = {
     "shopping.toast_refreshed": "🔄 Refreshed",
     # History entries (old list messages are rewritten into these)
     "history.header": "📜 <b>{list}</b>",
+    # An old list message that could not be deleted (Telegram allows that for 48 hours only).
+    "history.superseded": "📜 <b>{list}</b>\n<i>↓ The current list is further down.</i>",
     "history.line": "<i>{time} · {user}</i> {what}",
     # Day shown before the time for entries from another day (strftime format).
     "history.date_format": "%b %d",

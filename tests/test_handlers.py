@@ -687,3 +687,67 @@ async def test_register_commands_publishes_menu_and_description():
     await register_commands(Bot("123456:placeholder", session=session), settings(bot_language="de"))
     assert [c.language_code for c in session.sent(SetMyCommands)] == [None]
     assert session.sent(SetMyCommands)[0].commands[0].command == "liste"
+
+
+# --- robustness (review findings) -------------------------------------------
+
+
+async def test_undo_survives_a_mealie_outage(harness, mealie_mock):
+    feed, session = harness
+    mock_list(mealie_mock)
+    mealie_mock.post("/api/households/shopping/items/create-bulk").respond(
+        201, json={"createdItems": [make_item("n-1", "Eggs")], "updatedItems": []}
+    )
+    await feed(message("eggs"))
+    list_message_id = session.next_id
+    delete = mealie_mock.delete("/api/households/shopping/items").respond(503)
+    await feed(callback(ListAction(action="undo").pack(), message_id=list_message_id))
+    assert "Mealie antwortet nicht" in session.last(AnswerCallbackQuery).text
+
+    delete.respond(json={})
+    await feed(callback(ListAction(action="undo").pack(), message_id=list_message_id))
+    assert delete.calls.last.request.url.params.get_list("ids") == ["n-1"]
+    assert session.last(AnswerCallbackQuery).text == "↩️ 1 Eintrag rückgängig"
+
+
+async def test_old_list_message_is_rewritten_when_it_cannot_be_deleted(harness, mealie_mock):
+    feed, session = harness
+    mock_list(mealie_mock, make_item("i-1", "Milk"))
+    await feed(message("/list"))
+    first = session.next_id
+    # Telegram refuses every deletion: the command stays, so the list is sent
+    # again, and the old list message cannot go either.
+    session.fail_deletes = True
+    await feed(message("/list", message_id=2))
+    stub = [e for e in session.sent(EditMessageText) if e.message_id == first][-1]
+    assert stub.text == "📜 <b>Groceries</b>\n<i>↓ The current list is further down.</i>"
+    assert stub.reply_markup is None
+
+
+async def test_long_toast_is_cut_to_telegram_limit(harness, mealie_mock):
+    feed, session = harness
+    item = make_item("l-1", "", note="very long note " * 20)
+    mock_list(mealie_mock, item)
+    mealie_mock.get("/api/households/shopping/items/l-1").respond(json=item)
+    mealie_mock.put("/api/households/shopping/items/l-1").respond(json=item)
+    await feed(callback(ItemAction(action="check", item_id="l-1", view=VIEW_OPEN).pack()))
+    toast = session.last(AnswerCallbackQuery).text
+    assert len(toast) == 200 and toast.endswith("…")
+
+
+async def test_unknown_command_and_photo_get_a_hint(harness, mealie_mock):
+    feed, session = harness
+    await feed(message("/foo"))
+    assert "/help" in session.last(SendMessage).text
+    photo = Update(
+        update_id=3,
+        message=Message(
+            message_id=4,
+            date=datetime.now(UTC),
+            chat=Chat(id=ALICE, type="private"),
+            from_user=User(id=ALICE, is_bot=False, first_name="Alice", language_code="de"),
+            caption="Einkauf",
+        ),
+    )
+    await feed(photo)
+    assert session.last(SendMessage).text.startswith("Ich verstehe nur Text")

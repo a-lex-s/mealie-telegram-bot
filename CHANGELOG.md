@@ -25,6 +25,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stripped. Over the limit the bot replies instead of asking Mealie.
 - IDs from button data are validated before they are used in a Mealie request
   path.
+
+### Fixed
+
+- *Undo* keeps its data when Mealie is unreachable, so the tap can be repeated.
+- Old list messages that Telegram no longer lets the bot delete (after 48
+  hours) are rewritten into a stub without buttons instead of lingering.
+- Toasts are cut to Telegram's 200 characters.
+- A hint for unknown commands and non-text messages (photos, voice messages).
+
 ### Changed
 
 - Foods are loaded once and cached for 10 minutes (reloaded on a miss after a

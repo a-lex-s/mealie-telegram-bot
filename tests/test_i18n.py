@@ -86,3 +86,10 @@ def test_unit_synonyms_merge_languages():
     synonyms = unit_synonyms()
     assert {"l", "liter", "litre"} <= synonyms["l"]
     assert "stück" in synonyms["piece"]
+
+
+def test_singular_variant_is_used_for_count_one():
+    assert Translator("en")("shopping.cleared", count=1) == "🧹 Removed 1 item"
+    assert Translator("de")("shopping.cleared", count=2) == "🧹 2 Einträge entfernt"
+    # No singular variant: the plural template is used.
+    assert Translator("en")("shopping.btn_done", count=1) == "✅ Done (1)"

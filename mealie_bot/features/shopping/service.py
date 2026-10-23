@@ -221,13 +221,14 @@ class ShoppingService:
         previous = [before[item["id"]] for item in updated if item["id"] in before]
         return AddResult(created=created, updated=updated, previous=previous)
 
-    async def undo_add(self, result: AddResult) -> int:
-        """Revert one ``add_entries`` call. Returns the number of entries reverted."""
-        await self._client.delete_items([item["id"] for item in result.created])
-        for item in result.previous:
+    async def undo_add(self, created_ids: list[str], previous: list[JSON]) -> int:
+        """Revert one ``add_entries`` call: delete the created items and restore the
+        previous versions of merged ones. Returns the number of entries reverted."""
+        await self._client.delete_items(created_ids)
+        for item in previous:
             payload = {key: item[key] for key in _UPDATE_FIELDS if key in item}
             await self._client.update_item(item["id"], payload)
-        return len(result.created) + len(result.previous)
+        return len(created_ids) + len(previous)
 
     async def set_checked(self, item_id: str, checked: bool) -> JSON:
         """Tick an item off (or put it back) and return the item as it was before."""

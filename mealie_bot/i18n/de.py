@@ -62,6 +62,8 @@ MESSAGES: dict[str, str] = {
         "⚠️ Telegram hat die Listennachricht nicht angenommen. "
         "Bitte noch einmal versuchen oder in Mealie nachsehen."
     ),
+    "error.only_text": "Ich verstehe nur Text. Schick die Einträge als Nachricht, oder /hilfe.",
+    "error.unknown_command": "Den Befehl kenne ich nicht. /hilfe zeigt, was ich kann.",
     "shopping.list_header": "🛒 <b>{list}</b>",
     "shopping.count_open": "{count} offen",
     "shopping.count_done": "{count} erledigt",
@@ -101,6 +103,7 @@ MESSAGES: dict[str, str] = {
     "shopping.only_list": "📋 Es gibt nur die Liste <b>{list}</b>.",
     "shopping.toast_refreshed": "🔄 Aktualisiert",
     "history.header": "📜 <b>{list}</b>",
+    "history.superseded": "📜 <b>{list}</b>\n<i>↓ Die aktuelle Liste steht weiter unten.</i>",
     "history.line": "<i>{time} · {user}</i> {what}",
     # Day shown before the time for entries from another day (strftime format).
     "history.date_format": "%d.%m.",

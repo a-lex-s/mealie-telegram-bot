@@ -29,6 +29,8 @@ MAX_ITEM_BUTTONS = 80
 MAX_BUTTON_TEXT = 40
 # Telegram messages hold 4096 characters; quotes list at most this many items.
 MAX_QUOTE_ITEMS = 20
+# answerCallbackQuery accepts at most 200 characters.
+MAX_TOAST_TEXT = 200
 PROGRESS_CELLS = 10
 # Buttons in one row share its width equally, so short names are packed together.
 _ROW_SIZES = ((10, 3), (18, 2))
@@ -162,8 +164,13 @@ def label_name(item: JSON, tr: Translator) -> str:
     return str((item.get("label") or {}).get("name") or tr("shopping.label_none"))
 
 
-def _truncate(text: str) -> str:
-    return text if len(text) <= MAX_BUTTON_TEXT else text[: MAX_BUTTON_TEXT - 1] + "…"
+def _truncate(text: str, limit: int = MAX_BUTTON_TEXT) -> str:
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def toast_text(text: str) -> str:
+    """Cut a toast to what Telegram accepts."""
+    return _truncate(text, MAX_TOAST_TEXT)
 
 
 def _quote(header: str, lines: list[str], tr: Translator) -> str:

@@ -80,8 +80,10 @@ def test_feature_toggle():
 async def test_dispatcher_builds_with_and_without_features():
     client = MealieClient(BASE_URL, "m")
     try:
-        assert len(build_dispatcher(_settings(), client).sub_routers) == 2
-        assert len(build_dispatcher(_settings(features=frozenset()), client).sub_routers) == 1
+        routers = [r.name for r in build_dispatcher(_settings(), client).sub_routers]
+        assert routers == ["core", "shopping", "fallback"]
+        without = build_dispatcher(_settings(features=frozenset()), client).sub_routers
+        assert [r.name for r in without] == ["core", "fallback"]
     finally:
         await client.aclose()
 

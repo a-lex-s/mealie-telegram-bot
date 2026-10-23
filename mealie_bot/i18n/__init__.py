@@ -38,6 +38,7 @@ class Translator:
         self._messages: dict[str, str] = CATALOGS[self.language].MESSAGES
 
     def __call__(self, key: str, **kwargs: object) -> str:
+        # A singular variant "<key>.one" is used when ``count`` is exactly 1.
         if kwargs.get("count") == 1 and f"{key}.one" in self._messages:
             key = f"{key}.one"
         template = self._messages.get(key) or en.MESSAGES[key]

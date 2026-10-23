@@ -189,7 +189,9 @@ directly below the user's message with:
 * an **Undo** button in place of *Refresh*. Undo deletes the created items and
   restores the previous version of merged items (quantity before the merge),
   then the button turns back into *Refresh*. Undo data belongs to that list
-  message and is dropped when the message is replaced or the bot restarts.
+  message and is dropped when the message is replaced or the bot restarts. If
+  Mealie cannot be reached when Undo is tapped, the data is kept and the tap
+  can be repeated.
 
 ### 6.4 The live list message
 
@@ -239,8 +241,8 @@ is shown; the bot edits it in place instead of posting new messages.
   next item as long as all its items allow that many per row (three of at most
   10 characters, two of at most 18 characters, longer names alone). Items
   without a food use their note as name.
-* Tapping an item ticks it off in Mealie, answers with a toast (`✅ Mehl · 500 g`)
-  and refreshes the message in place.
+* Tapping an item ticks it off in Mealie, answers with a toast (`✅ Mehl · 500 g`,
+  cut to Telegram's 200 characters) and refreshes the message in place.
 * **Done (m)** switches the message to the ticked-off items (newest first), with
   the same button packing, headed `✅ <b>Done</b> · m`; tapping one puts it back
   (toast "🔁 … is open again"). **🛒 Open (n)** switches back, **Remove (m)**
@@ -255,6 +257,9 @@ is shown; the bot edits it in place instead of posting new messages.
   (*Added*, *Done*, the removal question) list at most 20 items and count the
   rest, so the message stays below Telegram's 4096 characters.
 * If an item no longer exists when tapped, the bot says so in a toast and refreshes.
+* After a restart the bot knows nothing about earlier list messages. Their
+  buttons still work: a tap re-renders that message in the view the button
+  belonged to (open or done), with all categories collapsed.
 
 ### 6.5 Removing ticked-off items
 
@@ -283,6 +288,9 @@ is not simply deleted:
 * If the previous history entry is less than 15 minutes old, the new changes
   are appended to that entry instead and the old list message is deleted.
 * If nothing changed, the old list message is deleted.
+* Telegram lets bots delete messages for 48 hours only. If deleting fails,
+  the old list message is rewritten into a stub without buttons instead
+  (`📜 list` / "↓ The current list is further down.").
 
 History entries therefore accumulate above the live list and move up as the
 chat grows. The history lives in memory and starts fresh after a restart.
@@ -299,6 +307,10 @@ answer. Requests that are
 safe to repeat (`GET`, `PUT`, `DELETE`) are retried once after half a second on
 connection errors; `POST` (bulk create) is not, to avoid duplicates. The bot
 starts even if Mealie is down and retries with each user action.
+
+A command no feature knows (`/foo`) gets "I do not know that command", and a
+message without text (photo, voice message, sticker) gets "I only understand
+text", each with a pointer to `/help`.
 
 ## 7. Mealie API usage
 

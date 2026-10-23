@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
-from aiogram import Bot, Dispatcher, Router
+from aiogram import Bot, Dispatcher, F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import BotCommand, BotCommandScopeDefault, Message
 
@@ -48,6 +48,22 @@ def build_core_router(features: list[Feature]) -> Router:
     return router
 
 
+def build_fallback_router() -> Router:
+    """Answers whatever no feature handled: unknown commands and non-text messages."""
+    router = Router(name="fallback")
+
+    @router.message(F.text)
+    async def unknown_command(message: Message, tr: Translator) -> None:
+        await message.answer(tr("error.unknown_command"))
+
+    @router.message()
+    async def not_text(message: Message, tr: Translator) -> None:
+        # Photos, voice messages, stickers: say what the bot can work with.
+        await message.answer(tr("error.only_text"))
+
+    return router
+
+
 def build_dispatcher(settings: Settings, mealie: MealieClient) -> Dispatcher:
     dispatcher = Dispatcher()
     # Access control on the update observer covers every update type, not only the
@@ -62,6 +78,7 @@ def build_dispatcher(settings: Settings, mealie: MealieClient) -> Dispatcher:
     for feature in features:
         dispatcher.include_router(feature.build_router(context))
         log.info("Feature enabled: %s", feature.name)
+    dispatcher.include_router(build_fallback_router())
     return dispatcher
 
 

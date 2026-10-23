@@ -217,6 +217,9 @@ def test_quantities_and_progress():
     assert format_quantity(0.333, "de") == "⅓"
     assert format_quantity(0.123456, "de") == "0,12"
     assert progress_bar(0, 0) == "▱" * 10
+    # A started list never looks empty, an unfinished one never full.
+    assert progress_bar(1, 20) == "▰" + "▱" * 9
+    assert progress_bar(19, 20) == "▰" * 9 + "▱"
     assert progress_bar(1, 3) == "▰▰▰▱▱▱▱▱▱▱"
     assert progress_bar(1, 40) == "▰" + "▱" * 9  # something done shows
     assert progress_bar(39, 40) == "▰" * 9 + "▱"  # something open shows
