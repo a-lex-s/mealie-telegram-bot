@@ -10,7 +10,6 @@ from mealie_bot.features.shopping.render import (
     ItemAction,
     ListAction,
     ListState,
-    UndoInfo,
     entry_display,
     format_quantity,
     item_display,
@@ -19,6 +18,7 @@ from mealie_bot.features.shopping.render import (
     progress_bar,
     render_list,
 )
+from mealie_bot.features.shopping.service import AddResult
 from mealie_bot.i18n import Translator
 from tests.conftest import make_item
 
@@ -83,7 +83,7 @@ def test_short_names_share_a_row_in_list_order():
 
 def test_added_quote_and_undo_button():
     added = [make_item("9", "", note="Flour", quantity=500, unit={"name": "g"}, label="Baking")]
-    state = ListState(expanded={"l-Baking"}, added=added, undo=UndoInfo(created_ids=["9"]))
+    state = ListState(expanded={"l-Baking"}, added=added, undo=AddResult(created=added))
     text, markup = render_list("G", [*added, make_item("1", "Soap")], state, EN)
     assert "➕ <b>Added:</b> <b>Flour</b> · <i>500 g · 🧁 Baking</i>" in text
     assert button_texts(markup)[-2:] == ["↩️ Undo", "✅ Done"]
@@ -185,7 +185,7 @@ def test_category_buttons_are_coloured_and_items_are_not():
     header, apple, other, controls = markup.inline_keyboard
     assert header[0].style == other[0].style == "primary" and apple[0].style is None
     assert [b.style for b in controls] == [None, "success"]
-    _, markup = render_list("G", items, ListState(undo=UndoInfo(created_ids=["1"])), EN)
+    _, markup = render_list("G", items, ListState(undo=AddResult(created=items[:1])), EN)
     assert markup.inline_keyboard[-1][0].style is None  # undo is safe, so not red
     _, markup = render_list("G", items, ListState(view=VIEW_DONE), EN)
     assert [b.style for b in markup.inline_keyboard[-1]] == [None, "danger"]

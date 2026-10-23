@@ -6,11 +6,12 @@ restart the next ``/list`` simply starts a fresh live message.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from html import escape
 
-from mealie_bot.features.shopping.render import ListState
+from mealie_bot.features.shopping.render import VIEW_DONE, VIEW_OPEN, ListState
 from mealie_bot.i18n import Translator
 
 # Changes closer together than this share one history message.
@@ -49,9 +50,18 @@ class ChatState:
     history_events: list[HistoryEvent] = field(default_factory=list)
     # Error messages the bot posted; deleted once the list is shown again.
     error_message_ids: list[int] = field(default_factory=list)
+    # Handlers for one chat run one after another (two taps, two texts at once).
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
-    def state_for(self, message_id: int) -> ListState:
-        return self.states.setdefault(message_id, ListState())
+    def state_for(self, message_id: int, view: str = VIEW_OPEN) -> ListState:
+        """The display state of a list message.
+
+        After a restart no state exists; ``view`` (from the callback data) then
+        keeps a tap in the done view from jumping back to the open list.
+        """
+        if message_id not in self.states:
+            self.states[message_id] = ListState(view=view if view == VIEW_DONE else VIEW_OPEN)
+        return self.states[message_id]
 
     def record(self, event: HistoryEvent) -> None:
         if not (self.pending and self.pending[-1].merge(event)):

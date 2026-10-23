@@ -1,8 +1,10 @@
 """End-to-end handler tests: Telegram updates in, Mealie requests and bot replies out."""
 
+import asyncio
 import json
 from datetime import UTC, datetime
 
+import httpx
 import pytest
 from aiogram import Bot
 from aiogram.client.session.base import BaseSession
@@ -43,6 +45,9 @@ class RecordingSession(BaseSession):
         self.fail_deletes = False  # e.g. a group where the bot may not delete messages
 
     async def make_request(self, bot, method, timeout=None):
+        # Yield to the event loop like a real request would, so that concurrent
+        # updates really interleave.
+        await asyncio.sleep(0)
         self.calls.append(method)
         if isinstance(method, DeleteMessage) and self.fail_deletes:
             raise TelegramBadRequest(method, "Bad Request: message can't be deleted")
@@ -129,8 +134,9 @@ def message(text, user_id=ALICE, language="en", message_id=1):
     )
 
 
-def callback(data, user_id=ALICE, message_id=5, language="de"):
+def callback(data, user_id=ALICE, message_id=5, language="de", chat_id=None):
     user = User(id=user_id, is_bot=False, first_name="Bob", language_code=language)
+    chat_id = user_id if chat_id is None else chat_id
     return Update(
         update_id=2,
         callback_query=CallbackQuery(
@@ -141,7 +147,7 @@ def callback(data, user_id=ALICE, message_id=5, language="de"):
             message=Message(
                 message_id=message_id,
                 date=datetime.now(UTC),
-                chat=Chat(id=user_id, type="private"),
+                chat=Chat(id=chat_id, type="private"),
                 from_user=user,
                 text="old",
             ),
@@ -374,6 +380,10 @@ async def test_second_list_command_edits_the_live_message_in_place(harness, meal
     assert session.last(EditMessageText).message_id == first
     assert first not in [d.message_id for d in session.sent(DeleteMessage)]
     assert [d.message_id for d in session.sent(DeleteMessage)] == [1, 2]
+    await feed(message("/clear", message_id=3))
+    edited = session.last(EditMessageText)
+    assert edited.message_id == first and "Nothing ticked off yet" in edited.text
+    assert len(session.sent(SendMessage)) == 1
 
 
 async def test_list_command_resends_when_the_command_could_not_be_deleted(harness, mealie_mock):
@@ -386,6 +396,43 @@ async def test_list_command_resends_when_the_command_could_not_be_deleted(harnes
     assert len(session.sent(SendMessage)) == 2
     # The old list message is deleted (nothing changed, so no history entry).
     assert first in [d.message_id for d in session.sent(DeleteMessage)]
+
+
+async def test_list_command_that_stays_in_the_chat_resends_the_list(mealie_mock):
+    client = MealieClient(BASE_URL, TOKEN)
+    session = RecordingSession()
+    bot = Bot("123456:placeholder", session=session)
+    dispatcher = build_dispatcher(settings(delete_commands=False), client)
+    mealie_mock.get("/api/households/shopping/lists").respond(
+        json={"items": [{"id": LIST_ID, "name": "Groceries"}]}
+    )
+    mock_list(mealie_mock, make_item("i-1", "Milk"))
+    await dispatcher.feed_update(bot, message("/list"))
+    first = session.next_id
+    await dispatcher.feed_update(bot, message("/list", message_id=2))
+    assert len(session.sent(SendMessage)) == 2
+    # The old list message is deleted (nothing changed, so no history entry).
+    assert first in [d.message_id for d in session.sent(DeleteMessage)]
+    await client.aclose()
+
+
+async def test_concurrent_texts_are_handled_one_after_another(harness, mealie_mock):
+    feed, session = harness
+    mock_list(mealie_mock, make_item("i-1", "Milk"))
+
+    async def slow_create(request):
+        await asyncio.sleep(0.01)  # Mealie takes a moment, the other text arrives meanwhile
+        return httpx.Response(201, json={"createdItems": [make_item("n-1", "Eggs")]})
+
+    mealie_mock.post("/api/households/shopping/items/create-bulk").mock(side_effect=slow_create)
+    await asyncio.gather(feed(message("eggs", message_id=2)), feed(message("eggs", message_id=3)))
+    # The per-chat lock keeps the Telegram calls of the first text (typing, delete,
+    # list) together instead of interleaving them with the second text's.
+    kinds = [type(call).__name__ for call in session.calls]
+    assert kinds[:4] == ["SendChatAction", "DeleteMessage", "SendMessage", "SendChatAction"]
+    first_id = session.next_id - 1
+    history = [e for e in session.sent(EditMessageText) if e.message_id == first_id]
+    assert history and history[-1].text.startswith("📜 <b>Groceries</b>")
 
 
 async def test_old_list_message_becomes_history_when_items_were_added(harness, mealie_mock):
@@ -433,6 +480,17 @@ async def test_tap_checks_item_toasts_and_refreshes(harness, mealie_mock):
     assert session.last(AnswerCallbackQuery).text == "✅ Milch"
     edited = session.last(EditMessageText)
     assert "Alles gekauft" in edited.text and "<s>Milch</s>" in edited.text
+
+
+async def test_tap_after_restart_keeps_the_done_view(harness, mealie_mock):
+    feed, session = harness
+    item = make_item("i-1", "Milch", checked=True)
+    mealie_mock.get("/api/households/shopping/items/i-1").respond(json=item)
+    mealie_mock.put("/api/households/shopping/items/i-1").respond(json={})
+    mock_list(mealie_mock, {**item, "checked": False}, make_item("i-2", "Brot", checked=True))
+    # No state exists for message 5: the view in the callback data decides.
+    await feed(callback(ItemAction(action="uncheck", item_id="i-1", view=VIEW_DONE).pack()))
+    assert "<b>Erledigt</b> · 1" in session.last(EditMessageText).text
 
 
 async def test_tap_on_missing_item(harness, mealie_mock):
@@ -506,6 +564,34 @@ async def test_lists_command_and_selection_turns_into_the_list(harness, mealie_m
     edited = session.last(EditMessageText)
     assert edited.message_id == chooser_id and "<b>Hardware</b>" in edited.text
     assert edited.reply_markup.inline_keyboard[0][0].text == "Nails"
+
+
+async def test_list_message_keeps_its_list_after_switching(harness, mealie_mock):
+    feed, session = harness
+    lists = mealie_mock.get("/api/households/shopping/lists").respond(
+        json={
+            "items": [
+                {"id": LIST_ID, "name": "Groceries"},
+                {"id": OTHER_LIST_ID, "name": "Hardware"},
+            ]
+        }
+    )
+    mock_list(mealie_mock, make_item("i-1", "Milk"))
+    mealie_mock.get(f"/api/households/shopping/lists/{OTHER_LIST_ID}").respond(
+        json={"id": OTHER_LIST_ID, "name": "Hardware", "listItems": []}
+    )
+    # Bob, in the same chat, switches the live message to Hardware.
+    await feed(message("/lists", user_id=BOB))
+    assert lists.called
+    chooser_id = session.next_id
+    select = SelectList(list_id=OTHER_LIST_ID).pack()
+    await feed(callback(select, user_id=BOB, message_id=chooser_id))
+    assert "<b>Hardware</b>" in session.last(EditMessageText).text
+    # Alice's active list is still Groceries, but her tap refreshes the message's own list.
+    show = ListAction(action="show", view=VIEW_OPEN).pack()
+    await feed(callback(show, chat_id=BOB, message_id=chooser_id))
+    edited = session.last(EditMessageText)
+    assert edited.message_id == chooser_id and "<b>Hardware</b>" in edited.text
 
 
 # --- errors -----------------------------------------------------------------

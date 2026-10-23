@@ -188,8 +188,8 @@ directly below the user's message with:
 * the categories of the added items expanded;
 * an **Undo** button in place of *Refresh*. Undo deletes the created items and
   restores the previous version of merged items (quantity before the merge),
-  then the button turns back into *Refresh*. Undo data is kept in memory for
-  the current list message only.
+  then the button turns back into *Refresh*. Undo data belongs to that list
+  message and is dropped when the message is replaced or the bot restarts.
 
 ### 6.4 The live list message
 
@@ -200,6 +200,12 @@ is shown; the bot edits it in place instead of posting new messages.
   into the live message. If anything was posted below it since (a user
   message, an error), the list is sent again at the bottom of the chat and the
   old message becomes a history entry or is deleted (6.6).
+* A list message remembers which list it shows. Taps on it refresh that list,
+  even if the person tapping has since chosen another list with `/lists`; a
+  tap on a message from before a restart falls back to the active list.
+* Updates in one chat are handled one after another (a lock per chat), so two
+  taps or two texts at the same time cannot produce two live messages or
+  race on the same item.
 * Text: `🛒 <b>list</b>`, a status line `n open · m done · <i>HH:MM</i>`
   (container local time) preceded by a progress bar in monospace
   (`▰▰▰▱▱▱▱▱▱▱`, ten cells, ticked-off share of all items; anything done fills

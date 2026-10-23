@@ -16,14 +16,16 @@ The chat is kept tidy around one *live* list message per chat:
   entry that records what was added. A message that failed stays, so the user
   can fix and resend it, and the error message is deleted the next time the
   list is shown.
+* Every handler holds the chat's lock, so two taps or two texts at the same
+  time are handled one after another.
 """
 
 from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Callable, Mapping
-from contextlib import suppress
+from collections.abc import AsyncIterator, Callable, Mapping
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime
 from html import escape
 
@@ -48,22 +50,15 @@ from mealie_bot.features.shopping.render import (
     ListAction,
     ListState,
     SelectList,
-    UndoInfo,
     item_display,
     item_inline,
     label_key,
     render_list,
 )
-from mealie_bot.features.shopping.service import (
-    AddResult,
-    ListView,
-    NoShoppingListError,
-    ShoppingService,
-)
+from mealie_bot.features.shopping.service import ListView, NoShoppingListError, ShoppingService
 from mealie_bot.features.shopping.state import ChatState, HistoryEvent, render_history
 from mealie_bot.i18n import Translator, command_names
 from mealie_bot.mealie import MealieError, MealieNotFound
-from mealie_bot.mealie.client import JSON
 
 log = logging.getLogger(__name__)
 
@@ -103,28 +98,38 @@ class ShoppingUI:
         self.label_emoji = label_emoji
         self.clock = clock
         self.chats: dict[int, ChatState] = {}
-        # Undo data by (chat id, message id); removed once used or superseded.
-        self.undo: dict[tuple[int, int], AddResult] = {}
         # Last fetched list per chat with its fetch time, so toggles need no round trip.
         self.cache: dict[int, tuple[ListView, datetime]] = {}
 
     def chat(self, chat_id: int) -> ChatState:
         return self.chats.setdefault(chat_id, ChatState())
 
+    @asynccontextmanager
+    async def locked(self, chat_id: int) -> AsyncIterator[ChatState]:
+        chat = self.chat(chat_id)
+        async with chat.lock:
+            yield chat
+
     # --- rendering ----------------------------------------------------------
+
+    async def list_id(self, user_id: int, state: ListState) -> str:
+        """The list a message shows: fixed on first render, else the user's active list."""
+        if state.list_id is None:
+            state.list_id = str((await self.service.active_list(user_id))["id"])
+        return state.list_id
 
     async def render(
         self, chat_id: int, user_id: int, state: ListState, tr: Translator, cached: bool = False
     ) -> tuple[str, InlineKeyboardMarkup, str]:
-        lists: list[JSON] | None = None
-        shopping_list = await self.service.active_list(user_id)
-        if state.view == VIEW_LISTS:
-            lists = await self.service.lists()
-        if cached and chat_id in self.cache and self.cache[chat_id][0].id == shopping_list["id"]:
-            data, now = self.cache[chat_id]
-        else:
-            data, now = await self.service.view(shopping_list["id"]), self.clock()
-            self.cache[chat_id] = (data, now)
+        try:
+            list_id = await self.list_id(user_id, state)
+            data, now = await self._view(chat_id, list_id, cached)
+        except MealieNotFound:
+            # The list was deleted in Mealie: fall back to whatever is active now.
+            state.list_id = None
+            list_id = await self.list_id(user_id, state)
+            data, now = await self._view(chat_id, list_id, cached)
+        lists = await self.service.lists() if state.view == VIEW_LISTS else None
         text, markup = render_list(
             data.name,
             data.items,
@@ -133,9 +138,17 @@ class ShoppingUI:
             now=now,
             emoji=self.label_emoji,
             lists=lists,
-            active_id=shopping_list["id"],
+            active_id=list_id,
         )
         return text, markup, data.name
+
+    async def _view(self, chat_id: int, list_id: str, cached: bool) -> tuple[ListView, datetime]:
+        """The list's items, from the chat's cache when ``cached`` and it is the same list."""
+        if cached and chat_id in self.cache and self.cache[chat_id][0].id == list_id:
+            return self.cache[chat_id]
+        data, now = await self.service.view(list_id), self.clock()
+        self.cache[chat_id] = (data, now)
+        return data, now
 
     async def show(self, message: Message, user_id: int, tr: Translator, state: ListState) -> None:
         """Show the list as the live message: edit it if it is still last, else re-send."""
@@ -192,7 +205,6 @@ class ShoppingUI:
         if old_id is None or old_id == new_id or message.bot is None:
             return
         chat.forget_message(old_id)
-        self.undo.pop((message.chat.id, old_id), None)
         extend, events = chat.take_pending()
         if events and not (extend and chat.history_message_id is not None):
             # Nothing recent to extend: the old list message itself becomes the entry.
@@ -292,11 +304,12 @@ def build_router(context: FeatureContext) -> Router:
 
     async def show_command(message: Message, tr: Translator, state: ListState) -> None:
         """Handle a list command: drop the command first so the live list can stay in place."""
-        await ui.tidy(message)
-        try:
-            await ui.show(message, _user_id(message), tr, state)
-        except _SHOW_ERRORS as exc:
-            await send_error(message, tr, exc)
+        async with ui.locked(message.chat.id):
+            await ui.tidy(message)
+            try:
+                await ui.show(message, _user_id(message), tr, state)
+            except _SHOW_ERRORS as exc:
+                await send_error(message, tr, exc)
 
     @router.message(Command(*command_names("list")))
     async def cmd_list(message: Message, tr: Translator) -> None:
@@ -322,6 +335,10 @@ def build_router(context: FeatureContext) -> Router:
 
     @router.message(F.text & ~F.text.startswith("/"))
     async def add_items(message: Message, tr: Translator) -> None:
+        async with ui.locked(message.chat.id):
+            await add_items_locked(message, tr)
+
+    async def add_items_locked(message: Message, tr: Translator) -> None:
         try:
             units = await service.units()
             try:
@@ -352,18 +369,15 @@ def build_router(context: FeatureContext) -> Router:
         names = [item_inline(item, tr.language) for item in result.items]
         ui.record(message.chat.id, "added", _user_name(message), names)
         state = ListState(
+            list_id=str(shopping_list["id"]),
             expanded={label_key(item) for item in result.items},
             added=result.items,
-            undo=UndoInfo(created_ids=[i["id"] for i in result.created], previous=result.previous),
+            undo=result if result else None,
         )
         try:
             await ui.show(message, _user_id(message), tr, state)
         except _SHOW_ERRORS as exc:
             await send_error(message, tr, exc)
-            return
-        chat = ui.chat(message.chat.id)
-        if chat.live_message_id is not None and result:
-            ui.undo[(message.chat.id, chat.live_message_id)] = result
 
     # --- buttons --------------------------------------------------------
 
@@ -373,6 +387,13 @@ def build_router(context: FeatureContext) -> Router:
         if not isinstance(message, Message) or not valid_id(callback_data.item_id):
             await query.answer()
             return
+        async with ui.locked(message.chat.id) as chat:
+            chat.state_for(message.message_id, callback_data.view)
+            await on_item_locked(query, message, callback_data, tr)
+
+    async def on_item_locked(
+        query: CallbackQuery, message: Message, callback_data: ItemAction, tr: Translator
+    ) -> None:
         checked = callback_data.action == "check"
         try:
             item = await service.set_checked(callback_data.item_id, checked)
@@ -404,8 +425,18 @@ def build_router(context: FeatureContext) -> Router:
         if action == "noop" or not isinstance(message, Message):
             await query.answer()
             return
-        chat = ui.chat(message.chat.id)
-        state = chat.state_for(message.message_id)
+        async with ui.locked(message.chat.id) as chat:
+            state = chat.state_for(message.message_id, callback_data.view)
+            await on_list_locked(query, message, state, callback_data, tr)
+
+    async def on_list_locked(
+        query: CallbackQuery,
+        message: Message,
+        state: ListState,
+        callback_data: ListAction,
+        tr: Translator,
+    ) -> None:
+        action = callback_data.action
         cached = False
         try:
             if action == "toggle":
@@ -416,18 +447,16 @@ def build_router(context: FeatureContext) -> Router:
                 await query.answer(tr("shopping.toast_refreshed"))
                 state.view = VIEW_OPEN
             elif action == "undo":
-                result = ui.undo.pop((message.chat.id, message.message_id), None)
+                result, state.undo, state.added = state.undo, None, []
                 if result is None:
                     await query.answer(tr("shopping.toast_nothing_to_undo"))
                 else:
                     count = await service.undo_add(result)
                     ui.record(message.chat.id, "undone", _user_name(query), [], count)
                     await query.answer(tr("shopping.toast_undone", count=count))
-                state.undo = None
-                state.added = []
             elif action == "clear":
-                shopping_list = await service.active_list(query.from_user.id)
-                removed = await service.clear_checked(shopping_list["id"])
+                list_id = await ui.list_id(query.from_user.id, state)
+                removed = await service.clear_checked(list_id)
                 ui.record(message.chat.id, "cleared", _user_name(query), [], len(removed))
                 await query.answer(tr("shopping.cleared", count=len(removed)))
                 state.view = VIEW_OPEN
@@ -452,10 +481,12 @@ def build_router(context: FeatureContext) -> Router:
             await query.answer()
             return
         service.select_list(query.from_user.id, callback_data.list_id)
-        try:
-            await query.answer()
-            await ui.show_in(message, query.from_user.id, tr, ListState())
-        except (MealieError, NoShoppingListError) as exc:
-            await toast_error(query, tr, exc)
+        async with ui.locked(message.chat.id):
+            try:
+                await query.answer()
+                state = ListState(list_id=callback_data.list_id)
+                await ui.show_in(message, query.from_user.id, tr, state)
+            except (MealieError, NoShoppingListError) as exc:
+                await toast_error(query, tr, exc)
 
     return router

@@ -18,6 +18,7 @@ from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from mealie_bot.features.shopping.parser import ParsedEntry
+from mealie_bot.features.shopping.service import AddResult
 from mealie_bot.i18n import Translator
 from mealie_bot.i18n.labels import label_emoji
 from mealie_bot.mealie.client import JSON
@@ -67,25 +68,16 @@ class SelectList(CallbackData, prefix="sel"):
 
 
 @dataclass
-class UndoInfo:
-    """What it takes to revert one "add items" request."""
-
-    created_ids: list[str] = field(default_factory=list)
-    # Previous versions of items Mealie merged the new entries into.
-    previous: list[JSON] = field(default_factory=list)
-
-    def __bool__(self) -> bool:
-        return bool(self.created_ids or self.previous)
-
-
-@dataclass
 class ListState:
     """Per-message display state of a list message."""
 
     view: str = VIEW_OPEN
+    # The list this message shows; None until first rendered (then the user's active list).
+    list_id: str | None = None
     expanded: set[str] = field(default_factory=set)
     added: list[JSON] = field(default_factory=list)
-    undo: UndoInfo | None = None
+    # What the last "add items" on this message did, as long as it can be undone.
+    undo: AddResult | None = None
 
     def toggle(self, label_key: str) -> None:
         if label_key in self.expanded:

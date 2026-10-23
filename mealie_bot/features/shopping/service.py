@@ -125,7 +125,10 @@ class ShoppingService:
         return await self._client.get_shopping_lists()
 
     async def active_list(self, user_id: int) -> JSON:
-        lists = await self.lists()
+        return self.pick_list(await self.lists(), user_id)
+
+    def pick_list(self, lists: list[JSON], user_id: int) -> JSON:
+        """The user's active list: their choice, then SHOPPING_LIST, then the first list."""
         if not lists:
             raise NoShoppingListError
         wanted = [self._selected.get(user_id), self._default_list]

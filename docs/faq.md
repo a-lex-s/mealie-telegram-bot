@@ -51,7 +51,8 @@ notifications in version 1.
 **Where did my `/list` message go?**
 The bot deletes `/list`, `/lists` and `/clear` right away so that only the
 list stays in the chat, and the list message is then updated in place
-(`/start` and `/help` stay). Set `DELETE_COMMANDS=false` to keep them.
+(`/start` and `/help` stay). Set `DELETE_COMMANDS=false` to keep them; the
+list is then re-sent below them.
 
 **Where did the items I typed go?**
 As soon as the items are in Mealie, the bot deletes your message and sends the

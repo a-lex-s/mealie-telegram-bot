@@ -43,9 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - English and German, chosen per user from the Telegram language or forced
   with `BOT_LANGUAGE`; bot description in the Telegram profile, expandable
   tips in `/start` and `/help`.
-- Tidy chat: one live list message per chat that is edited in place and
-  re-sent at the bottom when needed; `/list`, `/lists` and `/clear` messages
-  are deleted after handling (`DELETE_COMMANDS`), and so are messages that
+- Tidy chat: one live list message per chat that `/list` and `/clear` edit in
+  place and that is re-sent at the bottom when something else was posted;
+  `/list`, `/lists` and `/clear` messages are deleted before handling
+  (`DELETE_COMMANDS`), and so are messages that
   added items once the items are on the list (`DELETE_ITEM_MESSAGES`), while
   failed ones stay; old list messages turn into compact history entries (who
   added, ticked off or removed what, grouped by 15 minutes).
@@ -56,6 +57,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keyboard stays within Telegram's limits.
 - Robust error replies: Mealie answers that are not JSON and list messages
   that Telegram rejects both end in a short message instead of silence.
+- Updates in one chat are handled one after another, list messages remember
+  the list they show, and a tap on a message from before a restart keeps its
+  view.
 - Category buttons stand out: blue header buttons with an emoji per label
   (keyword table in German and English, overridable with `LABEL_EMOJI`),
   green *Done* and red *Undo* / *Remove* buttons.
