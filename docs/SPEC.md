@@ -112,9 +112,8 @@ bot do?") are published per language at start-up (`setMyCommands`,
 
 With `DELETE_COMMANDS=true` (default) the bot deletes the user's `/list`,
 `/lists` and `/clear` messages before it shows the list, so the chat holds
-the list and the history instead of a trail of commands, and the live list
-message (6.4) is still the last message and is edited in place instead of
-being sent again. `/start` and `/help` are never deleted.
+the list and the history instead of a trail of commands. `/start` and `/help`
+are never deleted.
 
 With `DELETE_ITEM_MESSAGES=true` (default) a plain text message is deleted as
 soon as its items are in Mealie, before the list is shown (see 6.3); the
@@ -203,12 +202,19 @@ directly below the user's message with:
 ### 6.4 The live list message
 
 Each chat has one *live* list message. It is the single place where the list
-is shown; the bot edits it in place instead of posting new messages.
+is shown; taps and changes from the other chat edit it in place.
 
-* `/list`, choosing a list, adding items and the confirmation flow all render
-  into the live message. If anything was posted below it since (a user
-  message, an error), the list is sent again at the bottom of the chat and the
-  old message becomes a history entry or is deleted (6.6).
+* `/list`, `/lists`, `/clear` and adding items send the list anew at the
+  bottom of the chat; the old message becomes a history entry or is deleted
+  (6.6). Commands never edit the old message in place: when the user has
+  cleared the chat history on their side, that message still exists for the
+  bot and an edit would succeed without anyone seeing it. Sending anew is
+  what makes `/list` bring the list back after a cleared chat, without a
+  restart. Taps (ticking off, categories, Refresh, Undo, Remove, choosing a
+  list) edit the tapped message in place.
+* If a live message was deleted on both sides (Telegram answers "message to
+  edit not found" to a sync from the other chat), the bot forgets it; the
+  next command sends a new one.
 * A list message remembers which list it shows. Taps on it refresh that list,
   even if someone has since chosen another list with `/lists` in that chat; a
   tap on a message from before a restart falls back to the chat's active list.

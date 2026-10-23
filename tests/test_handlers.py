@@ -358,21 +358,109 @@ async def test_toggle_expands_category(harness, mealie_mock):
     assert texts[:2] == ["🥛 Dairy (1) ▸", "📦 Sonstiges (1) ▸"]
 
 
-async def test_second_list_command_edits_the_live_message_in_place(harness, mealie_mock):
+async def test_second_list_command_resends_the_list_and_drops_the_old_one(harness, mealie_mock):
     feed, session = harness
     mock_list(mealie_mock, make_item("i-1", "Milk"))
     await feed(message("/list"))
     first = session.next_id
     await feed(message("/list", message_id=2))
-    # The command was deleted, so the live list is still last and is edited in place.
-    assert len(session.sent(SendMessage)) == 1
-    assert session.last(EditMessageText).message_id == first
-    assert first not in [d.message_id for d in session.sent(DeleteMessage)]
-    assert [d.message_id for d in session.sent(DeleteMessage)] == [1, 2]
+    # The command is deleted and the list is sent again; the old list message
+    # goes (nothing changed, so there is no history entry). It is never edited
+    # in place: a message the user has cleared from their side would take the
+    # edit without anyone seeing it.
+    assert len(session.sent(SendMessage)) == 2
+    assert [d.message_id for d in session.sent(DeleteMessage)] == [1, 2, first]
+    assert not session.sent(EditMessageText)
     await feed(message("/clear", message_id=3))
-    edited = session.last(EditMessageText)
-    assert edited.message_id == first and "Nothing ticked off yet" in edited.text
-    assert len(session.sent(SendMessage)) == 1
+    sent = session.last(SendMessage)
+    assert "Nothing ticked off yet" in sent.text
+    assert len(session.sent(SendMessage)) == 3
+
+
+class ClearedChatSession(RecordingSession):
+    """Telegram after the user cleared the chat history: ``gone`` holds the IDs of
+    messages that no longer exist for the bot either (cleared for both sides);
+    ``hidden`` the IDs cleared on the user's side only, which the bot can still
+    edit without the user seeing anything."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.gone: set[int] = set()
+        self.hidden: set[int] = set()
+
+    async def make_request(self, bot, method, timeout=None):
+        if isinstance(method, (EditMessageText, DeleteMessage)) and method.message_id in self.gone:
+            self.calls.append(method)
+            what = "edit" if isinstance(method, EditMessageText) else "delete"
+            raise TelegramBadRequest(method, f"Bad Request: message to {what} not found")
+        return await super().make_request(bot, method, timeout)
+
+
+@pytest.fixture
+async def cleared_harness(mealie_mock):
+    client = MealieClient(BASE_URL, TOKEN)
+    session = ClearedChatSession()
+    bot = Bot("123456:placeholder", session=session)
+    dispatcher = build_dispatcher(settings(), client)
+    mealie_mock.get("/api/households/shopping/lists").respond(
+        json={"items": [{"id": LIST_ID, "name": "Groceries"}]}
+    )
+    mealie_mock.get("/api/units").respond(json={"items": []})
+    mealie_mock.get("/api/foods").respond(json={"items": []})
+
+    async def feed(update):
+        await dispatcher.feed_update(bot, update)
+
+    yield feed, session
+    await client.aclose()
+
+
+@pytest.mark.parametrize("both_sides", [True, False], ids=["cleared_for_both", "cleared_for_user"])
+async def test_list_command_after_the_user_cleared_the_chat(
+    cleared_harness, mealie_mock, both_sides
+):
+    feed, session = cleared_harness
+    mock_list(mealie_mock, make_item("i-1", "Milk"))
+    await feed(message("/list"))
+    first = session.next_id
+    (session.gone if both_sides else session.hidden).add(first)
+    await feed(message("/list", message_id=2))
+    # A new list is sent in either case, without a restart and without an error reply.
+    sent = session.sent(SendMessage)
+    assert len(sent) == 2 and "<b>Groceries</b>" in sent[-1].text
+    assert first in [d.message_id for d in session.sent(DeleteMessage)]
+    assert not [e for e in session.sent(EditMessageText) if e.message_id == first]
+    # The new message is the live one: a tap on it refreshes it.
+    live = session.next_id
+    await feed(callback(ListAction(action="refresh").pack(), message_id=live))
+    assert session.last(EditMessageText).message_id == live
+
+
+async def test_sync_forgets_a_live_message_deleted_on_both_sides(cleared_harness, mealie_mock):
+    feed, session = cleared_harness
+    route = mock_list(mealie_mock, make_item("i-1", "Milk"))
+    await feed(message("/list", user_id=ALICE))
+    await feed(message("/list", user_id=BOB, language="de"))
+    bob_list = session.next_id
+    session.gone.add(bob_list)
+    route.respond(
+        json={
+            "id": LIST_ID,
+            "name": "Groceries",
+            "listItems": [make_item("i-1", "Milk"), make_item("n-1", "Eggs")],
+        }
+    )
+    mealie_mock.post("/api/households/shopping/items/create-bulk").respond(
+        201, json={"createdItems": [make_item("n-1", "Eggs")]}
+    )
+    await feed(message("eggs", user_id=ALICE, message_id=2))
+    # One failed edit, then Bob's chat is no longer synced until he asks for the list again.
+    assert len([e for e in session.sent(EditMessageText) if e.message_id == bob_list]) == 1
+    await feed(message("bread", user_id=ALICE, message_id=3))
+    assert len([e for e in session.sent(EditMessageText) if e.message_id == bob_list]) == 1
+    await feed(message("/list", user_id=BOB, language="de", message_id=4))
+    assert "2 offen" in session.last(SendMessage).text
+    assert bob_list not in [d.message_id for d in session.sent(DeleteMessage)]
 
 
 async def test_list_command_resends_when_the_command_could_not_be_deleted(harness, mealie_mock):
@@ -532,14 +620,14 @@ async def test_lists_command_and_selection_turns_into_the_list(harness, mealie_m
     await feed(message("/list"))
     live_id = session.next_id
     await feed(message("/lists", message_id=2))
-    # The chooser is rendered into the live list message.
-    reply = session.last(EditMessageText)
-    assert reply.message_id == live_id
+    # The chooser is the new live list message; the old one is deleted.
+    reply = session.last(SendMessage)
+    assert live_id in [d.message_id for d in session.sent(DeleteMessage)]
     assert "Which shopping list?" in reply.text
     assert buttons(reply) == ["Groceries", "Hardware", "✕ Cancel"]
     styles = [b.style for row in reply.reply_markup.inline_keyboard for b in row]
     assert styles == ["primary", None, None]
-    chooser_id = live_id
+    chooser_id = session.next_id
 
     mealie_mock.get(f"/api/households/shopping/lists/{OTHER_LIST_ID}").respond(
         json={"id": OTHER_LIST_ID, "name": "Hardware", "listItems": [make_item("h-1", "Nails")]}

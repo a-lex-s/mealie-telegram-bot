@@ -31,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pip install -e .` no longer fails with "Multiple top-level packages" when a
   `secrets/` directory exists in the checkout; packaging is limited to
   `mealie_bot`.
+- `/list`, `/lists` and `/clear` always send the list as a new message instead
+  of editing the old one. After the user cleared the chat history, the old
+  message still existed on the bot's side, the edit succeeded unseen and no
+  list appeared until the bot was restarted. A live message that is gone on
+  both sides is forgotten when a sync from the other chat hits it.
 - *Undo* keeps its data when Mealie is unreachable, so the tap can be repeated.
 - Old list messages that Telegram no longer lets the bot delete (after 48
   hours) are rewritten into a stub without buttons instead of lingering.
@@ -66,8 +71,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - English and German, chosen per user from the Telegram language or forced
   with `BOT_LANGUAGE`; bot description in the Telegram profile, expandable
   tips in `/start` and `/help`.
-- Tidy chat: one live list message per chat that `/list` and `/clear` edit in
-  place and that is re-sent at the bottom when something else was posted;
+- Tidy chat: one live list message per chat that taps update in place and
+  that `/list`, `/clear` and new items re-send at the bottom;
   `/list`, `/lists` and `/clear` messages are deleted before handling
   (`DELETE_COMMANDS`), and so are messages that
   added items once the items are on the list (`DELETE_ITEM_MESSAGES`), while
@@ -97,10 +102,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the default colour, *Remove* in the control row once everything is bought,
   *Cancel* left of *Yes, remove*, history items written as typed with a date
   for other days, the active list coloured in `/lists`.
-- Less flicker: commands are deleted before the list is shown so the live
-  message is edited in place, item messages are deleted before the list moves
-  down, opening a category needs no Mealie round trip, *Refresh* answers with
-  a toast, `/lists` renders its chooser into the live message with a *Cancel*
+- Less flicker: commands are deleted before the list is shown, item messages
+  are deleted before the list moves down, opening a category needs no Mealie
+  round trip, *Refresh* answers with a toast, `/lists` shows its chooser in the
+  list message with a *Cancel*
   button (and just names the list when there is only one), and the bot's own
   error messages are deleted once the list is shown again.
 - Adding items shows the updated list with an "Added" quote and an Undo button

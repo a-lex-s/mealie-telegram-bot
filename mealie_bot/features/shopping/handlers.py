@@ -155,15 +155,16 @@ class ShoppingUI:
         return data, now
 
     async def show(self, message: Message, tr: Translator, state: ListState) -> None:
-        """Show the list as the live message: edit it if it is still last, else re-send."""
+        """Show the list as a new live message at the bottom of the chat.
+
+        The list is always sent again, never edited in place: when the user has
+        cleared the chat history on their side, the old message still exists for
+        the bot and an edit would succeed without anyone seeing it. The old
+        message becomes a history entry or is deleted (see ``_relocate``).
+        """
         chat = self.chat(message.chat.id)
         text, markup, list_name = await self.render(message.chat.id, state, tr)
         await self._drop_errors(message, chat)
-        if chat.live_message_id is not None and chat.live_is_last:
-            with suppress(*_TELEGRAM_ERRORS):
-                await _edit(message.bot, message.chat.id, chat.live_message_id, text, markup)
-                chat.states[chat.live_message_id] = state
-                return
         sent = await message.answer(text, reply_markup=markup)
         await self._relocate(chat, message, sent.message_id, list_name, tr)
         chat.states[sent.message_id] = state
@@ -203,7 +204,9 @@ class ShoppingUI:
                 state = chat.state_for(chat.live_message_id)
                 text, markup, _ = await self.render(chat_id, state, tr)
                 with suppress(*_TELEGRAM_ERRORS):
-                    await _edit(bot, chat_id, chat.live_message_id, text, markup)
+                    if not await _edit(bot, chat_id, chat.live_message_id, text, markup):
+                        # Deleted on both sides: the chat has no live message any more.
+                        chat.drop_live_message()
             except (MealieError, NoShoppingListError) as exc:
                 log.warning("Syncing list for another chat failed: %s", exc)
 
@@ -222,7 +225,6 @@ class ShoppingUI:
         """Make ``new_id`` the live message; the old one becomes history or disappears."""
         old_id = chat.live_message_id
         chat.live_message_id = new_id
-        chat.live_is_last = True
         if old_id is None or old_id == new_id or message.bot is None:
             return
         chat.forget_message(old_id)
@@ -254,6 +256,8 @@ class ShoppingUI:
         try:
             await bot.delete_message(chat_id, message_id)
         except _TELEGRAM_ERRORS as exc:
+            if "message to delete not found" in str(exc):
+                return  # already gone (e.g. the user cleared the chat for both sides)
             log.info("Could not delete message %s, rewriting it: %s", message_id, exc)
             with suppress(*_TELEGRAM_ERRORS):
                 await bot.edit_message_text(
@@ -263,10 +267,6 @@ class ShoppingUI:
                 )
 
     # --- bookkeeping --------------------------------------------------------
-
-    def note_message(self, message: Message) -> None:
-        """A message arrived or was sent below the live list."""
-        self.chat(message.chat.id).live_is_last = False
 
     def record(
         self,
@@ -295,36 +295,34 @@ class ShoppingUI:
                 other.record(HistoryEvent(**vars(event)))
 
     async def tidy(self, message: Message, *, items: bool = False) -> None:
-        """Delete the user's message if configured, and note whether the list must move.
+        """Delete the user's command or item message if configured.
 
-        A deleted command leaves the live list as the last message, so it is
-        edited in place. A message that added items always makes the list move
-        down (the old message turns into the history entry), whether or not it
-        could be deleted. Deleting may fail (e.g. in a group where the bot cannot
-        delete others' messages); the message then simply stays.
+        Deleting may fail (e.g. in a group where the bot cannot delete others'
+        messages); the message then simply stays.
         """
         enabled = self.delete_item_messages if items else self.delete_commands
-        deleted = False
         if enabled:
             with suppress(*_TELEGRAM_ERRORS):
                 await message.delete()
-                deleted = True
-        if items or not deleted:
-            self.note_message(message)
 
 
 async def _edit(
     bot: Bot | None, chat_id: int, message_id: int, text: str, markup: InlineKeyboardMarkup
-) -> None:
+) -> bool:
+    """Edit a list message. Returns False if Telegram no longer knows the message
+    (deleted on both sides); an unchanged message counts as edited."""
     if bot is None:  # pragma: no cover - messages from the dispatcher always carry a bot
-        return
+        return True
     try:
         await bot.edit_message_text(
             text, chat_id=chat_id, message_id=message_id, reply_markup=markup
         )
     except TelegramBadRequest as exc:
+        if "message to edit not found" in str(exc):
+            return False
         if "message is not modified" not in str(exc):
             raise
+    return True
 
 
 def _owner_id(message: Message) -> int | None:
@@ -343,7 +341,6 @@ def build_router(context: FeatureContext) -> Router:
     router = Router(name="shopping")
 
     async def send_error(target: Message, tr: Translator, exc: Exception) -> None:
-        ui.note_message(target)
         if isinstance(exc, NoShoppingListError):
             sent = await target.answer(tr("error.no_lists"))
         elif isinstance(exc, _TELEGRAM_ERRORS):
@@ -363,7 +360,7 @@ def build_router(context: FeatureContext) -> Router:
     # --- commands -------------------------------------------------------
 
     async def show_command(message: Message, tr: Translator, state: ListState) -> None:
-        """Handle a list command: drop the command first so the live list can stay in place."""
+        """Handle a list command: drop the command, then send the list anew."""
         async with ui.locked(message.chat.id):
             await ui.tidy(message)
             try:
@@ -380,11 +377,9 @@ def build_router(context: FeatureContext) -> Router:
         try:
             lists = await service.lists()
         except MealieError as exc:
-            ui.note_message(message)
             await send_error(message, tr, exc)
             return
         if len(lists) == 1:
-            ui.note_message(message)
             await message.answer(tr("shopping.only_list", list=escape(lists[0].get("name") or "?")))
             return
         await show_command(message, tr, ListState(view=VIEW_LISTS))
@@ -410,7 +405,6 @@ def build_router(context: FeatureContext) -> Router:
                 await message.answer(tr("error.too_long", max=exc.limit))
                 return
             if not entries:
-                ui.note_message(message)
                 await message.answer(tr("error.not_understood"))
                 return
             # "typing…" while Mealie is asked; the list follows within a few seconds.
@@ -420,7 +414,6 @@ def build_router(context: FeatureContext) -> Router:
             shopping_list = await service.active_list(message.chat.id)
             result = await service.add_entries(shopping_list["id"], entries)
         except (MealieError, NoShoppingListError) as exc:
-            ui.note_message(message)
             await send_error(message, tr, exc)
             return
         # The items are in Mealie: the message may go (it is kept whenever

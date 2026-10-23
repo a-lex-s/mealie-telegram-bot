@@ -30,9 +30,10 @@ in Telegram. Recipes and meal plans may follow as separate, optional modules.
 Mockups of the bot's messages; names and items are placeholders. Real
 screenshots replace them as described in
 [docs/screenshots/README.md](docs/screenshots/README.md). The chat stays
-tidy: there is one live list message that the bot edits in place, taps answer
-with short toasts, and when the list moves down the old message turns into a
-compact history entry (`21:12 · Alice ➕ 500 g flour, baking powder`).
+tidy: there is one live list message that taps update in place, taps answer
+with short toasts, and when the list moves down (`/list`, new items) the old
+message turns into a compact history entry
+(`21:12 · Alice ➕ 500 g flour, baking powder`) or is deleted.
 
 ## Quick start
 

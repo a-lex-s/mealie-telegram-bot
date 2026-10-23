@@ -53,8 +53,6 @@ class ChatState:
     # Language of the live message; lets another chat's change re-render this
     # message (see ShoppingUI.sync_others).
     language: str | None = None
-    # False as soon as anything (a user message, an error) was posted below the live list.
-    live_is_last: bool = False
     states: dict[int, ListState] = field(default_factory=dict)
     # Changes since the last history entry was written.
     pending: list[HistoryEvent] = field(default_factory=list)
@@ -115,6 +113,12 @@ class ChatState:
 
     def forget_message(self, message_id: int) -> None:
         self.states.pop(message_id, None)
+
+    def drop_live_message(self) -> None:
+        """The live message is gone (deleted on both sides): the next command sends a new one."""
+        if self.live_message_id is not None:
+            self.forget_message(self.live_message_id)
+        self.live_message_id = None
 
 
 def render_history(

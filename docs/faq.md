@@ -60,9 +60,13 @@ in place. There are no push notifications in version 1.
 
 **Where did my `/list` message go?**
 The bot deletes `/list`, `/lists` and `/clear` right away so that only the
-list stays in the chat, and the list message is then updated in place
-(`/start` and `/help` stay). Set `DELETE_COMMANDS=false` to keep them; the
-list is then re-sent below them.
+list stays in the chat (`/start` and `/help` stay). Set `DELETE_COMMANDS=false`
+to keep them.
+
+**I cleared the chat history and the list is gone.**
+Send `/list`. Every command posts the list as a new message, so it comes back
+even if Telegram kept the old message on the bot's side only. The history
+that was in the chat is gone with the cleared messages.
 
 **Where did the items I typed go?**
 As soon as the items are in Mealie, the bot deletes your message and sends the
