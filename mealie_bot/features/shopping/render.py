@@ -259,12 +259,13 @@ def render_list(
     time_text = now.strftime("%H:%M") if now is not None else ""
     lines = [tr("shopping.list_header", list=name)]
     if items:
-        # "3 open · 1 done · 21:12"; the bar and the done count appear once something is done.
+        # A bar line, then "3 open · 1 done · 21:12"; the bar and the done count
+        # appear once something is done.
+        if checked:
+            lines.append(f"<code>{progress_bar(len(checked), len(items))}</code>")
         status = tr("shopping.count_open", count=len(unchecked))
         if checked:
-            status = f"<code>{progress_bar(len(checked), len(items))}</code> {status} · " + tr(
-                "shopping.count_done", count=len(checked)
-            )
+            status += " · " + tr("shopping.count_done", count=len(checked))
         if time_text:
             status += f" · <i>{time_text}</i>"
         lines.append(status)
