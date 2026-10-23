@@ -24,7 +24,8 @@ from mealie_bot.mealie.client import JSON
 
 # Telegram allows 100 buttons per keyboard; keep room for headers and controls.
 MAX_ITEM_BUTTONS = 80
-MAX_BUTTON_TEXT = 60
+# Telegram ellipsises long button texts itself; cut earlier so our "…" lands after the name.
+MAX_BUTTON_TEXT = 40
 PROGRESS_CELLS = 10
 # Buttons in one row share its width equally, so short names are packed together.
 _ROW_SIZES = ((10, 3), (18, 2))
@@ -91,8 +92,17 @@ class ListState:
 # --- item texts -----------------------------------------------------------
 
 
+# Pure fractions are shown as typed (``½``); everything else gets at most two decimals.
+_FRACTION_GLYPHS = {0.5: "½", 0.25: "¼", 0.75: "¾", 1 / 3: "⅓", 2 / 3: "⅔"}
+
+
 def format_quantity(quantity: float, language: str) -> str:
-    text = f"{quantity:g}" if quantity != int(quantity) else str(int(quantity))
+    if 0 < quantity < 1:
+        for value, glyph in _FRACTION_GLYPHS.items():
+            if abs(quantity - value) < 0.001:
+                return glyph
+    rounded = round(quantity, 2)
+    text = f"{rounded:g}" if rounded != int(rounded) else str(int(rounded))
     return text.replace(".", ",") if language == "de" else text
 
 
@@ -139,16 +149,22 @@ def item_parts(item: JSON, language: str) -> tuple[str, str]:
 
 
 def item_display(item: JSON, language: str) -> str:
-    """Plain text for buttons: "Mehl · 500 g"."""
+    """Plain text for buttons and toasts: "Mehl · 500 g"."""
     name, quantity = item_parts(item, language)
     return f"{name} · {quantity}" if quantity else name
 
 
-def item_html(item: JSON, language: str) -> str:
-    """HTML for message texts: name bold, quantity muted."""
+def item_inline(item: JSON, language: str) -> str:
+    """Plain text for running text such as history lines: "500 g Mehl", as one would type it."""
     name, quantity = item_parts(item, language)
-    text = f"<b>{escape(name)}</b>"
-    return f"{text} <i>{escape(quantity)}</i>" if quantity else text
+    return f"{quantity} {name}" if quantity else name
+
+
+def item_html(item: JSON, language: str, suffix: str = "") -> str:
+    """HTML for message texts: ``<b>Mehl</b> · <i>500 g · suffix</i>``."""
+    name, quantity = item_parts(item, language)
+    details = " · ".join(part for part in (escape(quantity), suffix) if part)
+    return f"<b>{escape(name)}</b> · <i>{details}</i>" if details else f"<b>{escape(name)}</b>"
 
 
 def label_key(item: JSON) -> str:
@@ -168,7 +184,12 @@ def _truncate(text: str) -> str:
 
 
 def progress_bar(done: int, total: int) -> str:
+    """Ten cells; anything done fills at least one, anything open leaves at least one empty."""
     filled = round(done / total * PROGRESS_CELLS) if total else 0
+    if done:
+        filled = max(filled, 1)
+    if done < total:
+        filled = min(filled, PROGRESS_CELLS - 1)
     return "▰" * filled + "▱" * (PROGRESS_CELLS - filled)
 
 
@@ -186,9 +207,9 @@ def _group(items: list[JSON], tr: Translator) -> list[tuple[str, str, list[JSON]
 
 
 def category_title(name: str, count: int, expanded: bool, emoji: Mapping[str, str] | None) -> str:
-    """Text of a category header button: ``🧂 Würzmittel · 2 ▾``."""
+    """Text of a category header button: ``🧂 Würzmittel (2) ▾``."""
     arrow = "▾" if expanded else "▸"
-    return f"{label_emoji(name, emoji)} {name} · {count} {arrow}"
+    return f"{label_emoji(name, emoji)} {name} ({count}) {arrow}"
 
 
 def render_list(
@@ -210,32 +231,46 @@ def render_list(
     if state.view == VIEW_DONE:
         return _render_done(name, checked, unchecked, tr)
 
+    time_text = now.strftime("%H:%M") if now is not None else ""
     lines = [tr("shopping.list_header", list=name)]
     if items:
-        lines.append(
-            f"<code>{progress_bar(len(checked), len(items))}</code> "
-            + tr("shopping.list_counts", open=len(unchecked), done=len(checked))
-        )
+        # "3 open · 1 done · 21:12"; the bar and the done count appear once something is done.
+        status = tr("shopping.count_open", count=len(unchecked))
+        if checked:
+            status = f"<code>{progress_bar(len(checked), len(items))}</code> {status} · " + tr(
+                "shopping.count_done", count=len(checked)
+            )
+        if time_text:
+            status += f" · <i>{time_text}</i>"
+        lines.append(status)
     if not unchecked:
         lines.append(tr("shopping.list_all_done" if checked else "shopping.list_empty"))
+        if not items and time_text:
+            lines.append(tr("shopping.updated_at", time=time_text))
     if state.added:
         added_lines = [
-            f"{item_html(item, language)} <i>· {label_emoji(label_name(item, tr), emoji)} "
-            f"{escape(label_name(item, tr))}</i>"
+            item_html(
+                item,
+                language,
+                f"{label_emoji(label_name(item, tr), emoji)} {escape(label_name(item, tr))}",
+            )
             for item in state.added
         ]
-        lines.append(
-            "<blockquote expandable>"
-            + tr("shopping.added_header", count=len(state.added))
-            + "\n"
-            + "\n".join(added_lines)
-            + "</blockquote>"
-        )
+        if len(added_lines) == 1:
+            lines.append(tr("shopping.added_one", item=added_lines[0]))
+        else:
+            lines.append(
+                "<blockquote expandable>"
+                + tr("shopping.added_header", count=len(added_lines))
+                + "\n"
+                + "\n".join(added_lines)
+                + "</blockquote>"
+            )
     if checked:
         done_lines = [f"<s>{escape(item_display(i, language))}</s>" for i in checked]
         lines.append(
             "<blockquote expandable>"
-            + tr("shopping.done_quote", count=len(checked))
+            + tr("shopping.done_quote")
             + "\n"
             + "\n".join(done_lines)
             + "</blockquote>"
@@ -267,14 +302,10 @@ def render_list(
     if hidden:
         lines.append(tr("shopping.more", count=hidden))
 
-    if now is not None:
-        lines.append(tr("shopping.updated_at", time=now.strftime("%H:%M")))
-
+    # Undo is the safe button, so it keeps the default colour; red is for deleting.
     controls = [
         InlineKeyboardButton(
-            text=tr("shopping.btn_undo"),
-            callback_data=ListAction(action="undo").pack(),
-            style=STYLE_DESTRUCTIVE,
+            text=tr("shopping.btn_undo"), callback_data=ListAction(action="undo").pack()
         )
         if state.undo
         else InlineKeyboardButton(
@@ -282,11 +313,22 @@ def render_list(
             callback_data=ListAction(action="show", view=VIEW_OPEN).pack(),
         ),
         InlineKeyboardButton(
-            text=tr("shopping.btn_done", count=len(checked)),
+            text=tr("shopping.btn_done", count=len(checked))
+            if checked
+            else tr("shopping.btn_done_none"),
             callback_data=ListAction(action="show", view=VIEW_DONE).pack(),
-            style=STYLE_DONE,
+            style=STYLE_DONE if checked else None,
         ),
     ]
+    if checked and not unchecked:
+        # Everything is bought: offer the clean-up right here.
+        controls.append(
+            InlineKeyboardButton(
+                text=tr("shopping.btn_clear", count=len(checked)),
+                callback_data=ListAction(action="clear_ask", view=VIEW_OPEN).pack(),
+                style=STYLE_DESTRUCTIVE,
+            )
+        )
     rows.append(controls)
     return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -295,11 +337,7 @@ def _render_done(
     name: str, checked: list[JSON], unchecked: list[JSON], tr: Translator
 ) -> tuple[str, InlineKeyboardMarkup]:
     shown = sorted(checked, key=lambda i: i.get("updatedAt") or "", reverse=True)
-    text = (
-        tr("shopping.done_header", list=name, count=len(checked))
-        if checked
-        else tr("shopping.done_empty", list=name)
-    )
+    text = tr("shopping.done_header", count=len(checked)) if checked else tr("shopping.done_empty")
     rows = _pack_rows(shown[:MAX_ITEM_BUTTONS], "uncheck", VIEW_DONE, tr.language)
     if len(shown) > MAX_ITEM_BUTTONS:
         text += "\n" + tr("shopping.more", count=len(shown) - MAX_ITEM_BUTTONS)
@@ -326,22 +364,23 @@ def _render_clear_question(
 ) -> tuple[str, InlineKeyboardMarkup]:
     if not checked:
         return _render_done(name, [], [], tr)
-    quote = " · ".join(f"<s>{escape(item_display(i, tr.language))}</s>" for i in checked)
+    quote = "\n".join(f"<s>{escape(item_display(i, tr.language))}</s>" for i in checked)
     text = (
-        tr("shopping.clear_question", list=name, count=len(checked))
+        tr("shopping.clear_question", count=len(checked))
         + f"\n<blockquote expandable>{quote}</blockquote>\n"
         + tr("shopping.clear_hint")
     )
+    # Cancel left, the destructive confirmation right, as in Telegram's own dialogs.
     rows = [
         [
+            InlineKeyboardButton(
+                text=tr("shopping.btn_cancel"),
+                callback_data=ListAction(action="show", view=VIEW_OPEN).pack(),
+            ),
             InlineKeyboardButton(
                 text=tr("shopping.btn_clear_yes"),
                 callback_data=ListAction(action="clear", view=VIEW_OPEN).pack(),
                 style=STYLE_DESTRUCTIVE,
-            ),
-            InlineKeyboardButton(
-                text=tr("shopping.btn_cancel"),
-                callback_data=ListAction(action="show", view=VIEW_OPEN).pack(),
             ),
         ]
     ]
@@ -361,19 +400,29 @@ def _row_size(text: str) -> int:
 def _pack_rows(
     items: list[JSON], action: str, view: str, language: str
 ) -> list[list[InlineKeyboardButton]]:
-    """Put short names three to a row, medium ones two, long ones alone."""
-    buckets: dict[int, list[InlineKeyboardButton]] = {3: [], 2: [], 1: []}
+    """Fill rows in list order: short names three to a row, medium ones two, long ones alone.
+
+    A row takes the next item as long as every item in it (the new one included)
+    allows that many per row, so the order of the list is kept.
+    """
+    rows: list[list[InlineKeyboardButton]] = []
+    row: list[InlineKeyboardButton] = []
+    capacity = 0
     for item in items:
         text = _truncate(item_display(item, language))
-        buckets[_row_size(text)].append(
-            InlineKeyboardButton(
-                text=text,
-                callback_data=ItemAction(action=action, item_id=item["id"], view=view).pack(),
-            )
+        button = InlineKeyboardButton(
+            text=text, callback_data=ItemAction(action=action, item_id=item["id"], view=view).pack()
         )
-    rows: list[list[InlineKeyboardButton]] = []
-    for per_row, buttons in buckets.items():
-        rows.extend(buttons[i : i + per_row] for i in range(0, len(buttons), per_row))
+        size = _row_size(text)
+        if row and len(row) < min(capacity, size):
+            row.append(button)
+            capacity = min(capacity, size)
+        else:
+            if row:
+                rows.append(row)
+            row, capacity = [button], size
+    if row:
+        rows.append(row)
     return rows
 
 
@@ -383,10 +432,9 @@ def list_chooser(
     rows = [
         [
             InlineKeyboardButton(
-                text=_truncate(
-                    ("● " if item["id"] == active_id else "") + (item.get("name") or "?")
-                ),
+                text=_truncate(item.get("name") or "?"),
                 callback_data=SelectList(list_id=item["id"]).pack(),
+                style=STYLE_CATEGORY if item["id"] == active_id else None,
             )
         ]
         for item in lists

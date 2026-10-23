@@ -53,8 +53,18 @@ def test_render_history_lines_and_truncation():
     ]
     text = render_history("Groceries & more", events, Translator("de"))
     lines = text.split("\n")
-    assert lines[0] == "<i>📜 Groceries &amp; more</i>"
+    assert lines[0] == "📜 <b>Groceries &amp; more</b>"
     assert lines[1].startswith("<i>21:00 · Alice</i> ➕ item 0, ")
     assert lines[1].endswith(f", item {MAX_HISTORY_ITEMS - 1}, +2")
     assert lines[2] == "<i>21:05 · Bob</i> ✅ Milk &lt;b&gt;"
     assert lines[3] == "<i>21:09 · Alice</i> 🧹 3 Einträge entfernt"
+
+
+def test_render_history_dates_entries_from_other_days():
+    events = [event("added", items=["milk"]), event("checked", minutes=60 * 24 * 2, items=["milk"])]
+    today = (T0 + timedelta(days=2)).date()
+    lines = render_history("G", events, Translator("de"), today=today).split("\n")
+    assert lines[1] == "<i>01.01. 21:00 · Alice</i> ➕ milk"
+    assert lines[2] == "<i>21:00 · Alice</i> ✅ milk"
+    lines = render_history("G", events, Translator("en"), today=today).split("\n")
+    assert lines[1] == "<i>Jan 01 21:00 · Alice</i> ➕ milk"

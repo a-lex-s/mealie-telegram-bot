@@ -43,6 +43,7 @@ from mealie_bot.features.shopping.render import (
     SelectList,
     UndoInfo,
     item_display,
+    item_inline,
     label_key,
     list_chooser,
     render_list,
@@ -162,7 +163,7 @@ class ShoppingUI:
         if events and chat.history_message_id is not None:
             with suppress(*_TELEGRAM_ERRORS):
                 await message.bot.edit_message_text(
-                    render_history(list_name, events, tr),
+                    render_history(list_name, events, tr, today=self.clock().date()),
                     chat_id=message.chat.id,
                     message_id=chat.history_message_id,
                 )
@@ -295,7 +296,7 @@ def build_router(context: FeatureContext) -> Router:
         except (MealieError, NoShoppingListError) as exc:
             await send_error(message, tr, exc)
             return
-        names = [item_display(item, tr.language) for item in result.items]
+        names = [item_inline(item, tr.language) for item in result.items]
         ui.record(message.chat.id, "added", _user_name(message), names)
         state = ListState(
             expanded={label_key(item) for item in result.items},
@@ -333,7 +334,10 @@ def build_router(context: FeatureContext) -> Router:
         else:
             name = item_display(item, tr.language)
             ui.record(
-                message.chat.id, "checked" if checked else "unchecked", _user_name(query), [name]
+                message.chat.id,
+                "checked" if checked else "unchecked",
+                _user_name(query),
+                [item_inline(item, tr.language)],
             )
             await query.answer(
                 tr("shopping.toast_checked" if checked else "shopping.toast_unchecked", item=name)

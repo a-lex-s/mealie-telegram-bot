@@ -7,7 +7,7 @@ restart the next ``/list`` simply starts a fresh live message.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from html import escape
 
 from mealie_bot.features.shopping.render import ListState
@@ -84,9 +84,15 @@ class ChatState:
         self.states.pop(message_id, None)
 
 
-def render_history(list_name: str, events: list[HistoryEvent], tr: Translator) -> str:
+def render_history(
+    list_name: str, events: list[HistoryEvent], tr: Translator, today: date | None = None
+) -> str:
+    """History entry text; events from a day other than ``today`` carry their date."""
     lines = [tr("history.header", list=escape(list_name))]
     for event in events:
+        time = event.at.strftime("%H:%M")
+        if today is not None and event.at.date() != today:
+            time = f"{event.at.strftime(tr('history.date_format'))} {time}"
         if event.kind in {"cleared", "undone"}:
             what = tr(f"history.{event.kind}", count=event.count or len(event.items))
         else:
@@ -94,7 +100,5 @@ def render_history(list_name: str, events: list[HistoryEvent], tr: Translator) -
             if len(event.items) > MAX_HISTORY_ITEMS:
                 shown.append(f"+{len(event.items) - MAX_HISTORY_ITEMS}")
             what = tr(f"history.{event.kind}", items=", ".join(shown))
-        lines.append(
-            tr("history.line", time=event.at.strftime("%H:%M"), user=escape(event.user), what=what)
-        )
+        lines.append(tr("history.line", time=time, user=escape(event.user), what=what))
     return "\n".join(lines)

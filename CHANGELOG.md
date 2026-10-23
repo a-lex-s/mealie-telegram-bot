@@ -59,6 +59,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   toasts and history (`✅` ticked off, `🔁` put back), German texts address the
   user as "du", error texts are marked with `⚠️`, the command menu lists the
   list commands before `/help`.
+- List message polish: status line `n open · m done · HH:MM` (bar and done
+  count only once something is ticked off, bar never rounds a done or open
+  item away), category buttons `🧂 Label (n) ▸`, item rows packed in list
+  order, fractions shown as `½`, a single added item shown inline, *Undo* in
+  the default colour, *Remove* in the control row once everything is bought,
+  *Cancel* left of *Yes, remove*, history items written as typed with a date
+  for other days, the active list coloured in `/lists`.
 - Adding items shows the updated list with an "Added" quote and an Undo button
   that deletes the created items and restores merged quantities; toasts for
   button taps and "typing…" while Mealie is asked.

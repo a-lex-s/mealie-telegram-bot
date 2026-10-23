@@ -122,7 +122,7 @@ The active list of a user is, in this order: the list the user picked with
 made with `/lists` is kept in memory and resets when the bot restarts. If Mealie
 has no shopping list, the bot says so; it never creates lists.
 
-`/lists` shows one button per list, the active one marked with `●`. Choosing a
+`/lists` shows one button per list, the active one coloured blue. Choosing a
 list turns that message into the live list message (see 6.4).
 
 ### 6.3 Adding items
@@ -178,7 +178,8 @@ While Mealie is asked, the bot shows "typing…". It then shows the list (6.4)
 directly below the user's message with:
 
 * an expandable quote **Added (n)** listing what Mealie stored, as
-  `<b>name</b> <i>quantity</i> · label`, so merges and categories are visible;
+  `<b>name</b> · <i>quantity · emoji label</i>`, so merges and categories are
+  visible; a single entry is shown inline as `➕ <b>Added:</b> …` without a quote;
 * the categories of the added items expanded;
 * an **Undo** button in place of *Refresh*. Undo deletes the created items and
   restores the previous version of merged items (quantity before the merge),
@@ -194,20 +195,27 @@ is shown; the bot edits it in place instead of posting new messages.
   into the live message. If anything was posted below it since (a user
   message, an error), the list is sent again at the bottom of the chat and the
   old message becomes a history entry or is deleted (6.6).
-* Text: `🛒 <b>list</b>`, a progress bar in monospace (`▰▰▰▱▱▱▱▱▱▱`, ten cells,
-  ticked-off share of all items) with `n open · m done`, an expandable quote
-  **Done (m)** with the ticked-off items struck through, and `<i>As of HH:MM</i>`
-  (container local time). Empty list: "The list is empty."; everything ticked
-  off: "🎉 All bought.".
-* Keyboard: one header button per label (`🧂 Label · n ▸` collapsed,
-  `🧂 Label · n ▾` expanded), labels alphabetical with unlabelled items last as
+* Text: `🛒 <b>list</b>`, a status line `n open · m done · <i>HH:MM</i>`
+  (container local time) preceded by a progress bar in monospace
+  (`▰▰▰▱▱▱▱▱▱▱`, ten cells, ticked-off share of all items; anything done fills
+  at least one cell, anything open leaves at least one empty). Before the first
+  item is ticked off the line is just `n open · <i>HH:MM</i>` without bar or
+  done count. Ticked-off items follow in an expandable quote **Done**, struck
+  through. Empty list: "The list is empty." plus `<i>As of HH:MM</i>`; everything
+  ticked off: "🎉 All bought.".
+* Quantities: whole numbers as such, pure fractions as `½ ¼ ¾ ⅓ ⅔`, everything
+  else with at most two decimals (`1,5` in German, `1.5` in English).
+* Keyboard: one header button per label (`🧂 Label (n) ▸` collapsed,
+  `🧂 Label (n) ▾` expanded), labels alphabetical with unlabelled items last as
   "Other". All categories start collapsed; tapping a header toggles it for that
   message. A list with a single category shows its items directly without a
   header.
 * Header buttons are coloured blue (Bot API button `style` `primary`), item
-  buttons keep the default colour, **Done** is green (`success`), **Undo**,
-  **Remove** and **Yes, remove** are red (`danger`). Clients that predate
-  button styles show plain buttons.
+  buttons and **Undo** / **Refresh** keep the default colour, **Done (m)** is
+  green (`success`) and reads just **Done** without colour while nothing is
+  ticked off, **Remove** and **Yes, remove** are red (`danger`). Clients that
+  predate button styles show plain buttons. When everything is ticked off,
+  **Remove (m)** joins the control row.
 * Each category gets an emoji from a keyword table in `mealie_bot/i18n/labels.py`
   (German and English keywords, case-insensitive substring match on the label
   name, first match wins; e.g. "Obst & Gemüse" and "Fruit" → 🍎, "Würzmittel"
@@ -215,13 +223,17 @@ is shown; the bot edits it in place instead of posting new messages.
   without a label get 📦. `LABEL_EMOJI` maps exact label names to an emoji and
   wins over the table. The same emoji appears in the "Added" quote.
 * Items of an expanded category are buttons labelled `name · quantity`
-  (`Mehl · 500 g`; quantity 1 without unit is omitted). Short names share a
-  row (up to three of at most 10 characters, two of at most 18 characters),
-  longer names get their own row. Items without a food use their note as name.
+  (`Mehl · 500 g`; quantity 1 without unit is omitted; texts longer than 40
+  characters are cut with `…`). Rows are filled in list order: a row takes the
+  next item as long as all its items allow that many per row (three of at most
+  10 characters, two of at most 18 characters, longer names alone). Items
+  without a food use their note as name.
 * Tapping an item ticks it off in Mealie, answers with a toast (`✅ Mehl · 500 g`)
   and refreshes the message in place.
 * **Done (m)** switches the message to the ticked-off items (newest first), with
-  the same button packing; tapping one puts it back (toast "🔁 … is open again"). **Open (n)** switches back, **Remove (m)** asks for confirmation.
+  the same button packing, headed `✅ <b>Done</b> · m`; tapping one puts it back
+  (toast "🔁 … is open again"). **🛒 Open (n)** switches back, **Remove (m)**
+  asks for confirmation.
 * **Refresh** reloads the list. Changes made in Mealie or by the other person
   show up on refresh or with the next action; there is no push notification.
 * At most 80 items are shown as buttons (Telegram allows 100 per message); the
@@ -230,9 +242,10 @@ is shown; the bot edits it in place instead of posting new messages.
 
 ### 6.5 Removing ticked-off items
 
-`/clear` and **Remove (m)** show a confirmation in the list message: the
-ticked-off items struck through in a quote, the hint that this deletes them
-from Mealie, and the buttons **Yes, remove** / **Cancel**. *Yes* deletes them
+`/clear` and **Remove (m)** show a confirmation in the list message:
+`🧹 Remove <b>m</b> ticked-off items for good?`, the ticked-off items struck
+through one per line in a quote, the hint that this also deletes them in
+Mealie, and the buttons **✕ Cancel** / **Yes, remove**. *Yes* deletes them
 in Mealie and shows the open list with a toast; *Cancel* just shows the open
 list. With nothing to remove, the done view is shown instead.
 
@@ -243,11 +256,14 @@ is not simply deleted:
 
 * If anything changed since the last history entry (items added, ticked off,
   put back, removed or undone), the old message is rewritten into a compact
-  history entry: `<i>📜 list</i>` followed by one line per change,
+  history entry: `📜 <b>list</b>` followed by one line per change,
   `<i>HH:MM · first name</i> ➕ items` (`✅` ticked off, `🔁` put back,
   `🧹 n items removed`, `↩️ n items undone`). Consecutive changes of the same kind by the
-  same person are merged into one line; at most 8 item names are listed per
-  line and 12 lines per entry.
+  same person are merged into one line; items are written as one would type
+  them (`500 g Mehl`); at most 8 item names are listed per line and 12 lines
+  per entry. Changes from a day other than the one the entry is written on
+  carry their date before the time (`01.10. 21:12` in German, `Oct 01 21:12`
+  in English).
 * If the previous history entry is less than 15 minutes old, the new changes
   are appended to that entry instead and the old list message is deleted.
 * If nothing changed, the old list message is deleted.

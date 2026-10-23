@@ -162,8 +162,7 @@ async def test_text_adds_items_and_shows_list_with_undo(harness, mealie_mock):
     assert session.sent(SendChatAction)
     reply = session.last(SendMessage)
     assert "Groceries" in reply.text
-    assert "➕ <b>Added</b> (1)" in reply.text
-    assert "<b>l milk</b> <i>2</i> <i>· 🥛 Dairy</i>" in reply.text
+    assert "➕ <b>Added:</b> <b>l milk</b> · <i>2 · 🥛 Dairy</i>" in reply.text
     assert reply.reply_markup.inline_keyboard[-1][0].text == "↩️ Undo"
     # The user's text is deleted once the items are on the list.
     deleted = session.last(DeleteMessage)
@@ -215,7 +214,7 @@ async def test_item_message_stays_when_delete_is_not_allowed(harness, mealie_moc
     session.make_request = make_request
     await feed(message("eggs"))
     assert session.sent(DeleteMessage)  # tried, failed quietly
-    assert "➕ <b>Added</b> (1)" in session.last(SendMessage).text
+    assert "➕ <b>Added:</b>" in session.last(SendMessage).text
 
 
 async def test_undo_deletes_created_and_restores_merged_items(harness, mealie_mock):
@@ -314,12 +313,12 @@ async def test_list_command_in_german_collapsed_and_tidy(harness, mealie_mock):
     )
     await feed(message("/liste", user_id=BOB, language="de", message_id=7))
     reply = session.last(SendMessage)
-    assert "2 offen · 0 erledigt" in reply.text
+    assert "\n2 offen · <i>" in reply.text  # no bar and no "0 erledigt" before the first tick
     assert buttons(reply) == [
-        "🍞 Backwaren · 1 ▸",
-        "🥛 Milchprodukte · 1 ▸",
+        "🍞 Backwaren (1) ▸",
+        "🥛 Milchprodukte (1) ▸",
         "🔄 Aktualisieren",
-        "✅ Erledigt (0)",
+        "✅ Erledigt",
     ]
     deleted = session.last(DeleteMessage)
     assert (deleted.chat_id, deleted.message_id) == (BOB, 7)
@@ -344,10 +343,10 @@ async def test_toggle_expands_category(harness, mealie_mock):
     mock_list(mealie_mock, make_item("i-1", "Milch", label="Dairy"), make_item("i-2", "Soap"))
     await feed(callback(ListAction(action="toggle", arg=NO_LABEL).pack()))
     texts = buttons(session.last(EditMessageText))
-    assert texts[:3] == ["🥛 Dairy · 1 ▸", "📦 Sonstiges · 1 ▾", "Soap"]
+    assert texts[:3] == ["🥛 Dairy (1) ▸", "📦 Sonstiges (1) ▾", "Soap"]
     await feed(callback(ListAction(action="toggle", arg=NO_LABEL).pack()))
     texts = buttons(session.last(EditMessageText))
-    assert texts[:2] == ["🥛 Dairy · 1 ▸", "📦 Sonstiges · 1 ▸"]
+    assert texts[:2] == ["🥛 Dairy (1) ▸", "📦 Sonstiges (1) ▸"]
 
 
 async def test_second_list_command_replaces_the_old_message(harness, mealie_mock):
@@ -371,8 +370,8 @@ async def test_old_list_message_becomes_history_when_items_were_added(harness, m
     )
     await feed(message("6 eggs", message_id=2))
     history = [e for e in session.sent(EditMessageText) if e.message_id == first]
-    assert history and history[-1].text.startswith("<i>📜 Groceries</i>\n")
-    assert "· Alice</i> ➕ eggs · 6" in history[-1].text
+    assert history and history[-1].text.startswith("📜 <b>Groceries</b>\n")
+    assert "· Alice</i> ➕ 6 eggs" in history[-1].text
     assert first not in [d.message_id for d in session.sent(DeleteMessage)]
 
 
@@ -423,13 +422,13 @@ async def test_done_view_uncheck_and_clear_with_confirmation(harness, mealie_moc
     mock_list(mealie_mock, item)
     await feed(callback(ListAction(action="show", view=VIEW_DONE).pack()))
     edited = session.last(EditMessageText)
-    assert "1 erledigt" in edited.text
+    assert "✅ <b>Erledigt</b> · 1" in edited.text
     assert edited.reply_markup.inline_keyboard[-1][1].text == "🧹 Entfernen (1)"
 
     await feed(callback(ListAction(action="clear_ask", view=VIEW_DONE).pack()))
     edited = session.last(EditMessageText)
     assert "entfernen?" in edited.text
-    assert buttons(edited) == ["🧹 Ja, entfernen", "Abbrechen"]
+    assert buttons(edited) == ["✕ Abbrechen", "🧹 Ja, entfernen"]
 
     delete = mealie_mock.delete("/api/households/shopping/items").respond(json={})
     await feed(callback(ListAction(action="clear", view=VIEW_OPEN).pack()))
@@ -442,8 +441,8 @@ async def test_clear_command_asks_first(harness, mealie_mock):
     mock_list(mealie_mock, make_item("i-1", "Milk", checked=True), make_item("i-2", "Eggs"))
     await feed(message("/clear"))
     reply = session.last(SendMessage)
-    assert "Remove 1 ticked-off item from Groceries?" in reply.text
-    assert reply.reply_markup.inline_keyboard[0][1].text == "Cancel"
+    assert "Remove <b>1</b> ticked-off item for good?" in reply.text
+    assert reply.reply_markup.inline_keyboard[0][0].text == "✕ Cancel"
 
 
 # --- choosing a list --------------------------------------------------------
@@ -462,7 +461,8 @@ async def test_lists_command_and_selection_turns_into_the_list(harness, mealie_m
     await feed(message("/lists"))
     reply = session.last(SendMessage)
     assert "Which shopping list?" in reply.text
-    assert buttons(reply) == ["● Groceries", "Hardware"]
+    assert buttons(reply) == ["Groceries", "Hardware"]
+    assert [b.style for row in reply.reply_markup.inline_keyboard for b in row] == ["primary", None]
     chooser_id = session.next_id
 
     mealie_mock.get(f"/api/households/shopping/lists/{OTHER_LIST_ID}").respond(
