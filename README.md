@@ -1,3 +1,5 @@
+<img src="docs/avatar/bot-avatar.png" alt="" width="96" align="right">
+
 # mealie-telegram-bot
 
 [![CI](https://github.com/a-lex-s/mealie-telegram-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/a-lex-s/mealie-telegram-bot/actions/workflows/ci.yml)
@@ -7,19 +9,18 @@
 [![Mealie 3.29.0](https://img.shields.io/badge/Mealie-3.29.0-green)](docs/compatibility.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 
-A Telegram bot that acts as a lightweight front end for a self-hosted
-[Mealie](https://mealie.io) instance.
+A shared shopping list for your household in Telegram, backed by a
+self-hosted [Mealie](https://mealie.io) instance. Send what you need, tick it
+off with a tap, and everyone sees the same list in Telegram and in Mealie.
 
-Version 1 is a shopping list helper for a small household: send items as a
-message, tick them off with a tap, and everyone sees the same list in Mealie and
-in Telegram. Recipes and meal plans may follow as separate, optional modules.
+* One private chat per person or one shared group, always in sync
+* Understands quantities and units: `2 l milk`, `500g flour`, `3x lemons`
+* Sorts items by Mealie's foods and labels
+* English and German, chosen per user
+* Long polling only: no open port, no telemetry, no AI calls
 
-* Works in a private chat per person or in one shared group; a change by one
-  person quietly updates the other's list message
-* English and German, chosen per user from the Telegram language
-* Understands quantities and units: `2 l milk`, `500g flour`, `milk 2l`, `3x lemons`
-* Uses Mealie's foods, units and labels, so items land in the right category
-* Long polling only: no open port, no web server, no telemetry, no AI calls
+Version 1 covers shopping lists. Recipes and meal plans may follow as optional
+modules.
 
 ## How it looks
 
@@ -27,45 +28,31 @@ in Telegram. Recipes and meal plans may follow as separate, optional modules.
 |---|---|---|
 | ![/list shows the list with a progress bar, collapsed categories and the done items in a quote](docs/screenshots/list-collapsed.png) | ![A tapped category shows its items as buttons, short names sharing a row](docs/screenshots/list-expanded.png) | ![After "500 g flour, baking powder, 3 lemons" the list shows an "Added" quote, the new categories opened and an Undo button](docs/screenshots/add-items.png) |
 
-Screenshots with demo data; how they are made is described in
-[docs/screenshots/README.md](docs/screenshots/README.md). The chat stays
-tidy: there is one live list message that taps update in place, taps answer
-with short toasts, and when the list moves down (`/list`, new items) the old
-message turns into a compact history entry
-(`21:12 · Alice ➕ 500 g flour, baking powder`) or is deleted.
-
 ## Quick start
 
 You need a running Mealie instance (see [compatibility](docs/compatibility.md)),
 Docker with Compose, and a Telegram account.
 
-1. **Create a bot**: talk to [@BotFather](https://t.me/BotFather), send
-   `/newbot` and note the token. Optionally give the bot a profile picture
-   with `/setuserpic` and the one from
-   [docs/avatar/bot-avatar.png](docs/avatar/bot-avatar.png).
-2. **Create a Mealie API token**: in Mealie, open the profile of the user the bot
-   should act as and create a long-lived token under *API tokens*. A dedicated
-   Mealie user for the bot keeps things tidy.
-3. **Find your Telegram user IDs**: message [@userinfobot](https://t.me/userinfobot)
-   from every account that may use the bot, or start the bot with a placeholder
-   ID and read the real one from the `WARNING` line it logs for unknown users.
-4. **Add the service**: copy [compose.example.yml](compose.example.yml), set
-   the image tag (and digest) and `ALLOWED_USER_IDS`, and put the two tokens
-   into `secrets/telegram_bot_token` and `secrets/mealie_api_token` (readable
-   by UID 10001, the user inside the container: `chmod 644 secrets/*`). The file
-   has three variants: next to Mealie in the same Compose network
-   (`MEALIE_URL=http://mealie:9000`), standalone on any host against a Mealie
-   reachable over HTTPS (`MEALIE_URL=https://mealie.example.com`), and a
-   commented one for local testing against a Mealie on `localhost`.
-5. **Start it**: `docker compose up -d mealie-telegram-bot`. The log line
-   `Connected to Mealie <version>` shows that the start-up check passed.
-6. **Try it**: open the chat with your bot, send `/start`, then
-   `2 l milk, eggs`, then `/list`.
+1. **Create a bot** with [@BotFather](https://t.me/BotFather) (`/newbot`) and
+   note the token. A profile picture is in
+   [docs/avatar/bot-avatar.png](docs/avatar/bot-avatar.png) (`/setuserpic`).
+2. **Create a Mealie API token** under *Profile → API tokens*, ideally for a
+   dedicated Mealie user.
+3. **Find your Telegram user IDs** with [@userinfobot](https://t.me/userinfobot),
+   or read them from the `WARNING` line the bot logs for unknown users.
+4. **Configure** from [compose.example.yml](compose.example.yml): set the image
+   tag and `ALLOWED_USER_IDS`, and put the tokens into
+   `secrets/telegram_bot_token` and `secrets/mealie_api_token`
+   (`chmod 644 secrets/*`, the container runs as UID 10001). The file covers
+   Mealie in the same Compose network, a remote Mealie over HTTPS and local
+   testing.
+5. **Start** with `docker compose up -d mealie-telegram-bot` and look for
+   `Connected to Mealie <version>` in the log.
+6. **Try it**: send `/start`, then `2 l milk, eggs`.
 
-Images are published as `ghcr.io/a-lex-s/mealie-telegram-bot:<tag>` for
-`linux/amd64`; every [release](https://github.com/a-lex-s/mealie-telegram-bot/releases)
-prints the image digest so you can pin it. All settings are listed in
-[docs/configuration.md](docs/configuration.md).
+Images: `ghcr.io/a-lex-s/mealie-telegram-bot:<tag>` (`linux/amd64`). Each
+[release](https://github.com/a-lex-s/mealie-telegram-bot/releases) lists the
+digest for pinning. All settings: [docs/configuration.md](docs/configuration.md).
 
 ## Usage
 
@@ -77,10 +64,8 @@ prints the image digest so you can pin it. All settings are listed in
 | `/clear` | `/aufraeumen` | Remove ticked-off items (asks first) |
 | `/help` | `/hilfe` | Show help |
 
-Any other text message is added to the list, one item per line or separated by
-commas. Quantities and units are optional and may come first or last:
-`2 l milk`, `milk 2l`, `3x lemons`, `eggs 6`. The list then appears right below
-your message with what was added and an *Undo* button.
+Any other message adds items, one per line or separated by commas. The list
+then shows what was added, with an *Undo* button.
 
 ## Documentation
 
@@ -93,10 +78,8 @@ your message with what was added and an *Undo* button.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). In short: Conventional Commits, every
-change as a pull request with tests, squash merge to `main`, CI must be green,
-and no personal data anywhere in the repository. Security issues go through
-[SECURITY.md](SECURITY.md).
+Contributions are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md). Please
+report security issues privately as described in [SECURITY.md](SECURITY.md).
 
 ## License
 
