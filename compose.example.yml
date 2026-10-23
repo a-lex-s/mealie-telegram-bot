@@ -6,6 +6,13 @@
 #    (reverse proxy with a valid certificate). Set MEALIE_URL to the public URL,
 #    drop the "networks" entries and the external network at the bottom.
 # 3. Local testing with Mealie on localhost: see the commented service further down.
+#
+# The bot runs as UID 10001. Compose bind-mounts the secret files with their host
+# permissions, so they must be readable by that user, for example:
+#   chmod 644 secrets/telegram_bot_token secrets/mealie_api_token
+# (or chown 10001 for 0400). A root-only 0600 file ends in "Permission denied".
+# No healthcheck: the bot only long-polls Telegram, so there is no cheap check
+# that says more than "process alive"; restart: unless-stopped covers crashes.
 services:
   mealie-telegram-bot:
     image: ghcr.io/a-lex-s/mealie-telegram-bot:v0.1.0  # append @sha256:<digest> to pin

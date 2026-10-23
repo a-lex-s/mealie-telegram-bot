@@ -47,7 +47,8 @@ Docker with Compose, and a Telegram account.
    ID and read the real one from the `WARNING` line it logs for unknown users.
 4. **Add the service**: copy [compose.example.yml](compose.example.yml), set
    the image tag (and digest) and `ALLOWED_USER_IDS`, and put the two tokens
-   into `secrets/telegram_bot_token` and `secrets/mealie_api_token`. The file
+   into `secrets/telegram_bot_token` and `secrets/mealie_api_token` (readable
+   by UID 10001, the user inside the container: `chmod 644 secrets/*`). The file
    has three variants: next to Mealie in the same Compose network
    (`MEALIE_URL=http://mealie:9000`), standalone on any host against a Mealie
    reachable over HTTPS (`MEALIE_URL=https://mealie.example.com`), and a

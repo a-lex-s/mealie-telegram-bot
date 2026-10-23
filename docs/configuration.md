@@ -2,6 +2,8 @@
 
 All configuration comes from environment variables. Every variable can instead
 be read from a file by setting `<NAME>_FILE` (Docker or Compose secrets).
+The process in the container runs as UID 10001, so a secret file must be
+readable by that user (Compose bind-mounts it with its host permissions).
 
 | Variable | Required | Default | Description |
 |---|---|---|---|

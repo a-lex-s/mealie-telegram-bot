@@ -65,5 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release workflow: the tag is checked against the package version and `main`
   before CI runs, the GitHub release is created or updated so that a re-run
   succeeds, no `latest` tag is pushed, and every CI job has a timeout.
+- Docs and Compose example explain that secret files must be readable by
+  UID 10001 and why the image has no healthcheck.
 
 [Unreleased]: https://github.com/a-lex-s/mealie-telegram-bot/commits/main

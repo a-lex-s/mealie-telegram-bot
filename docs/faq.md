@@ -13,6 +13,10 @@ No. Set `MEALIE_URL` to any URL the bot can reach, for example
 verified; self-signed certificates are not supported. The API token travels in
 every request, so use HTTPS for anything outside a private network.
 
+**The container exits with "Permission denied" on the secret file.**
+The bot runs as UID 10001 and the secret files are mounted with their host
+permissions. Make them readable for that user: `chmod 644 secrets/*`.
+
 **Why does the bot ignore me?**
 Your Telegram user ID is not in `ALLOWED_USER_IDS`. The log shows the ID at
 `WARNING` level, once per unknown sender.

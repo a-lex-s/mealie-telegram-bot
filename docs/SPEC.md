@@ -311,6 +311,10 @@ OpenAPI file when `MEALIE_OPENAPI` points to one.
   and the SPDX SBOM attached. Every job has a timeout.
 * Deployment happens elsewhere: the image is pulled by tag and digest into a
   Compose stack that shares a network with Mealie. See `compose.example.yml`.
+* The container runs as UID 10001 with a read-only root file system and no
+  inbound port. There is no `HEALTHCHECK`: a long-polling bot has no cheap
+  check that says more than "process alive"; `restart: unless-stopped`
+  handles crashes.
 
 ## 10. Later (not in version 1)
 
