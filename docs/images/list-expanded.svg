@@ -7,7 +7,8 @@
 <text x="62" y="42" font-size="12" fill="#d8e8f7">bot</text>
 <rect x="16" y="72" width="320" height="120" rx="14" fill="#fff" stroke="#e5e5e5"/><text x="28" y="92" font-size="12" font-weight="600" fill="#2a7fcf">Mealie Bot</text>
 <text x="28" y="112" font-size="14" font-weight="600" fill="#111">🛒 Groceries</text>
-<text x="28" y="132" font-size="13" font-family="Menlo, Consolas, monospace" fill="#111">▰▰▰▱▱▱▱▱▱▱  7 open · 3 done · 21:04</text>
+<text x="28" y="132" font-size="13" fill="#111">7 open · 3 done · 21:04</text>
+<text x="28" y="148" font-size="13" font-family="Menlo, Consolas, monospace" fill="#111">▰▰▰▱▱▱▱▱▱▱</text>
 <rect x="28" y="166" width="296" height="28" rx="6" fill="#f1f7f3"/><rect x="28" y="166" width="3" height="28" rx="1.5" fill="#2a7fcf"/><text x="40" y="180" font-size="12" font-weight="600" fill="#111">✅ Done (3)</text><text x="314" y="180" font-size="10" text-anchor="end" fill="#2a7fcf">▼</text>
 <rect x="16.0" y="198" width="320.0" height="34" rx="8" fill="#2a7fcf"/><text x="176.0" y="220" font-size="13" text-anchor="middle" fill="#fff">🧁 Baking (2) ▸</text>
 <rect x="16.0" y="238" width="320.0" height="34" rx="8" fill="#2a7fcf"/><text x="176.0" y="260" font-size="13" text-anchor="middle" fill="#fff">🥛 Dairy (3) ▾</text>

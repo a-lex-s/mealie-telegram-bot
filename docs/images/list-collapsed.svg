@@ -8,7 +8,8 @@
 <text x="344" y="84" font-size="11" text-anchor="end" fill="#999" text-decoration="line-through">/list</text><text x="344" y="98" font-size="10" text-anchor="end" fill="#aaa">deleted after handling</text>
 <rect x="16" y="106" width="320" height="174" rx="14" fill="#fff" stroke="#e5e5e5"/><text x="28" y="126" font-size="12" font-weight="600" fill="#2a7fcf">Mealie Bot</text>
 <text x="28" y="146" font-size="14" font-weight="600" fill="#111">🛒 Groceries</text>
-<text x="28" y="166" font-size="13" font-family="Menlo, Consolas, monospace" fill="#111">▰▰▰▱▱▱▱▱▱▱  7 open · 3 done · 21:04</text>
+<text x="28" y="166" font-size="13" fill="#111">7 open · 3 done · 21:04</text>
+<text x="28" y="182" font-size="13" font-family="Menlo, Consolas, monospace" fill="#111">▰▰▰▱▱▱▱▱▱▱</text>
 <rect x="28" y="200" width="296" height="82" rx="6" fill="#f1f7f3"/><rect x="28" y="200" width="3" height="82" rx="1.5" fill="#2a7fcf"/><text x="40" y="214" font-size="12" font-weight="600" fill="#111">✅ Done (3)</text><text x="314" y="214" font-size="10" text-anchor="end" fill="#2a7fcf">▲</text>
 <text x="40" y="232" font-size="12" fill="#444">bread</text>
 <text x="40" y="250" font-size="12" fill="#444">butter</text>

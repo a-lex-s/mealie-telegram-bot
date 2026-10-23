@@ -216,11 +216,11 @@ is shown; the bot edits it in place instead of posting new messages.
   taps or two texts at the same time cannot produce two live messages or
   race on the same item.
 * Text: `🛒 <b>list</b>`, a status line `n open · m done · <i>HH:MM</i>`
-  (container local time) preceded by a progress bar in monospace
-  (`▰▰▰▱▱▱▱▱▱▱`, ten cells, ticked-off share of all items; anything done fills
-  at least one cell, anything open leaves at least one empty). Before the first
-  item is ticked off the line is just `n open · <i>HH:MM</i>` without bar or
-  done count. Ticked-off items follow in an expandable quote **Done**, struck
+  (container local time) followed by a progress bar in monospace on its own
+  line (`▰▰▰▱▱▱▱▱▱▱`, ten cells, ticked-off share of all items; anything done
+  fills at least one cell, anything open leaves at least one empty). Before the
+  first item is ticked off the line is just `n open · <i>HH:MM</i>` without
+  done count, and there is no bar. Ticked-off items follow in an expandable quote **Done**, struck
   through. Empty list: "The list is empty." plus `<i>As of HH:MM</i>`; everything
   ticked off: "🎉 All bought.".
 * Quantities: whole numbers as such, pure fractions as `½ ¼ ¾ ⅓ ⅔`, everything
