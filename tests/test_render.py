@@ -42,7 +42,7 @@ def test_collapsed_by_default_with_category_headers():
     ]
     text, markup = render_list("Groceries", items, ListState(), EN, now=NOW)
     assert "🛒 <b>Groceries</b>" in text
-    assert "<code>▰▰▱▱▱▱▱▱▱▱</code> 3 open · 1 done · <i>21:04</i>" in text  # 1 of 4 done
+    assert "\n<code>▰▰▱▱▱▱▱▱▱▱</code>\n3 open · 1 done · <i>21:04</i>\n" in text  # 1 of 4 done
     assert "<blockquote expandable>✅ <b>Done</b>\n<s>Milk</s></blockquote>" in text
     assert button_texts(markup) == ["🍎 Fruit (2) ▸", "📦 Other (1) ▸", "🔄 Refresh", "✅ Done (1)"]
     toggle = ListAction.unpack(markup.inline_keyboard[0][0].callback_data)
@@ -195,7 +195,7 @@ def test_all_bought_offers_remove_in_the_control_row():
     items = [make_item("1", "Milk", checked=True), make_item("2", "Eggs", checked=True)]
     text, markup = render_list("G", items, ListState(), EN)
     assert "🎉 All bought." in text
-    assert "<code>▰▰▰▰▰▰▰▰▰▰</code> 0 open · 2 done" in text
+    assert "<code>▰▰▰▰▰▰▰▰▰▰</code>\n0 open · 2 done" in text
     assert rows(markup) == [["🔄 Refresh", "✅ Done (2)", "🧹 Remove (2)"]]
     assert ListAction.unpack(markup.inline_keyboard[0][2].callback_data).action == "clear_ask"
 
