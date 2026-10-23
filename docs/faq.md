@@ -40,8 +40,9 @@ The one picked with `/lists`, otherwise `SHOPPING_LIST`, otherwise the first
 list by name. The choice made with `/lists` resets when the bot restarts.
 
 **Does the bot create foods, units or lists in Mealie?**
-No. Unknown foods are stored as a note on the item; unknown units are kept as
-part of the note; lists must exist in Mealie.
+No. Unknown foods are stored as a note on the item; an unknown unit goes into
+the note while the food (and its category) is still matched; lists must exist
+in Mealie. A food created in Mealie is picked up within a minute.
 
 **Changes made in Mealie do not show up in Telegram.**
 Tap *Refresh* (or any button) or send `/list` again. There are no push

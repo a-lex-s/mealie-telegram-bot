@@ -127,7 +127,8 @@ Any text message that is not a command adds items to the active list.
 
 * Entries are separated by line breaks, semicolons or commas. A comma between
   two digits is a decimal separator (`1,5 l Milch` is one entry).
-* Leading bullets (`-`, `•`, `*`) are ignored.
+* Leading bullets (`-`, `•`, `*`) and the numbering of a pasted list (`1.`,
+  `2)`) are ignored.
 * Each entry may carry a quantity and a unit, in front or at the end:
   `2 l milk`, `500g flour`, `milk 2l`, `milk 2 l`, `3x lemons`, `3 x lemons`,
   `lemons x3`, `eggs 6`. Quantities may be decimals with `.` or `,`, fractions
@@ -152,11 +153,16 @@ Matching against Mealie (per entry):
    abbreviation, plural abbreviation, aliases; case-insensitive). If that fails,
    all synonyms of the same catalog unit are tried (`litre` → Mealie unit `Liter`).
    Units are cached for 10 minutes.
-2. If a unit was typed but no Mealie unit matches, the entry is stored as a
-   note only (`kg Mehl`), so nothing typed is lost.
-3. **Food**: Mealie foods are searched by the entry's name; only an exact,
-   case-insensitive match on name, plural name or alias counts. A match sets
-   `foodId` and the food's label (`labelId`), which gives the item its category.
+2. **Food**: the entry's name is looked up among all Mealie foods; only an
+   exact, case-insensitive match on name, plural name or alias counts. A match
+   sets `foodId` and the food's label (`labelId`), which gives the item its
+   category. Foods are cached for 10 minutes like the units; a miss on a cache
+   older than a minute reloads them once, so a food just created in Mealie is
+   found.
+3. If a unit was typed but no Mealie unit matches, the unit goes into the
+   item's `note` and the food is still matched (`2 Netz Tomaten` → food
+   *Tomaten*, note `Netz`, quantity 2). Without a food match the whole text
+   becomes the note (`Netz Tomaten`), so nothing typed is lost.
 4. Without a food match the text becomes the item's `note`. The bot never
    creates foods or units in Mealie.
 
@@ -269,7 +275,7 @@ Verified against the OpenAPI document of Mealie v3.29.0. Authentication:
 | Add items | `POST /api/households/shopping/items/create-bulk` (array of `ShoppingListItemCreate`; the response `ShoppingListItemsCollectionOut` with `createdItems`/`updatedItems` feeds the "Added" quote and Undo) |
 | Tick off / put back | `PUT /api/households/shopping/items/{item_id}` (`ShoppingListItemUpdate`) |
 | Delete ticked-off items, undo added items | `DELETE /api/households/shopping/items?ids=…&ids=…` |
-| Find foods | `GET /api/foods?search=…&perPage=20` |
+| Foods | `GET /api/foods?perPage=-1` |
 | Units | `GET /api/units?perPage=-1` |
 
 `PUT` replaces the whole item, so the bot reads the item first and sends back

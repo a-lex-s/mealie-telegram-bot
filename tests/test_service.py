@@ -64,7 +64,7 @@ async def test_no_lists(service, mealie_mock):
 
 async def test_build_item_with_food_and_unit(service, mealie_mock):
     mealie_mock.get("/api/units").respond(json={"items": UNITS})
-    mealie_mock.get("/api/foods", params={"search": "Milch"}).respond(
+    mealie_mock.get("/api/foods").respond(
         json={"items": [make_food("f-1", "Milchreis"), make_food("f-2", "milch", "lab-1")]}
     )
     item = await service.build_item(LIST_ID, ParsedEntry("Milch", 2, "l"))
@@ -102,11 +102,32 @@ async def test_build_item_without_food_is_note(service, mealie_mock):
 
 async def test_build_item_unknown_unit_keeps_text(service, mealie_mock):
     mealie_mock.get("/api/units").respond(json={"items": UNITS})
-    foods = mealie_mock.get("/api/foods")
+    mealie_mock.get("/api/foods").respond(json={"items": []})
     item = await service.build_item(LIST_ID, ParsedEntry("Mehl", 1, "kg"))
     assert item["note"] == "kg Mehl"
     assert "unitId" not in item
-    assert not foods.called
+
+
+async def test_build_item_unknown_unit_still_matches_the_food(service, mealie_mock):
+    mealie_mock.get("/api/units").respond(json={"items": UNITS})
+    mealie_mock.get("/api/foods").respond(json={"items": [make_food("f-t", "Tomaten", "lab-v")]})
+    item = await service.build_item(LIST_ID, ParsedEntry("Tomaten", 2, "Netz"))
+    assert item["foodId"] == "f-t" and item["labelId"] == "lab-v"
+    assert item["note"] == "Netz" and "unitId" not in item
+
+
+async def test_foods_are_cached_and_rechecked_on_a_miss(client, mealie_mock):
+    now = [0.0]
+    service = ShoppingService(client, food_recheck_seconds=60, clock=lambda: now[0])
+    route = mealie_mock.get("/api/foods").respond(json={"items": [make_food("f-1", "Milch")]})
+    assert (await service.find_food("milch"))["id"] == "f-1"
+    assert await service.find_food("Eier") is None
+    assert route.call_count == 1  # a miss on a fresh cache does not reload
+    now[0] = 61
+    route.respond(json={"items": [make_food("f-1", "Milch"), make_food("f-2", "Eier")]})
+    assert (await service.find_food("Eier"))["id"] == "f-2"
+    assert route.call_count == 2
+    assert route.calls.last.request.url.params["perPage"] == "-1"
 
 
 async def test_units_are_cached(client, mealie_mock):

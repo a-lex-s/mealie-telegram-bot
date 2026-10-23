@@ -131,8 +131,8 @@ class MealieClient:
 
     # --- foods / units ----------------------------------------------------
 
-    async def search_foods(self, query: str, limit: int = 20) -> list[JSON]:
-        data = await self._request("GET", "/api/foods", params={"search": query, "perPage": limit})
+    async def get_foods(self) -> list[JSON]:
+        data = await self._request("GET", "/api/foods", params={"perPage": -1})
         return list(data.get("items", []))
 
     async def get_units(self) -> list[JSON]:

@@ -108,3 +108,12 @@ def test_entry_too_long():
     with pytest.raises(EntryTooLong):
         parse_message("m" * (MAX_ENTRY_LENGTH + 1), UNITS)
     assert parse_message("m" * MAX_ENTRY_LENGTH, UNITS) == [ParsedEntry("m" * MAX_ENTRY_LENGTH)]
+
+
+def test_numbered_lists_lose_their_numbering():
+    assert split_entries("1. Milch\n2) Eier\n1,5 l Wasser\n1.5 l Saft") == [
+        "Milch",
+        "Eier",
+        "1,5 l Wasser",
+        "1.5 l Saft",
+    ]

@@ -25,6 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stripped. Over the limit the bot replies instead of asking Mealie.
 - IDs from button data are validated before they are used in a Mealie request
   path.
+### Changed
+
+- Foods are loaded once and cached for 10 minutes (reloaded on a miss after a
+  minute) instead of searching Mealie per entry, so exact matches are no
+  longer limited to the first 20 search results.
+- An unknown unit no longer prevents the food match: `2 Netz Tomaten` becomes
+  the food *Tomaten* with the note `Netz` and keeps its category.
+- The numbering of pasted lists (`1. milk`, `2) eggs`) is ignored.
 
 ### Added
 

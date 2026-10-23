@@ -54,6 +54,8 @@ _QTY_TOKEN = re.compile(rf"^(?P<qty>{_NUMBER})(?P<unit>[^\W\d_][\w.]*)?$", re.UN
 # Commas separate entries unless they sit between two digits ("1,5 l").
 _SPLIT = re.compile(r"\n|(?<!\d),|,(?!\d)|;")
 _MULTIPLIER = {"x", "×"}  # noqa: RUF001
+# Numbering of a pasted list ("1. milk", "2) eggs"); "1.5 l" has no space after the dot.
+_NUMBERING = re.compile(r"^\d+[.)]\s+")
 
 
 @dataclass(frozen=True)
@@ -82,7 +84,8 @@ def parse_quantity(text: str) -> float | None:
 
 
 def split_entries(text: str) -> list[str]:
-    return [part.strip(" \t-•*") for part in _SPLIT.split(text) if part.strip(" \t-•*")]
+    parts = (_NUMBERING.sub("", part.strip(" \t-•*")) for part in _SPLIT.split(text))
+    return [part for part in parts if part.strip(" \t-•*")]
 
 
 def _match_qty(token: str, known_units: Container[str]) -> tuple[float, str | None] | None:

@@ -40,6 +40,19 @@ def _spellings(entity: JSON) -> set[str]:
     return {name.strip().casefold() for name in names if isinstance(name, str) and name.strip()}
 
 
+class FoodIndex:
+    """Exact, case-insensitive lookup of Mealie foods by name, plural name or alias."""
+
+    def __init__(self, foods: list[JSON]) -> None:
+        self._by_spelling: dict[str, JSON] = {}
+        for food in foods:
+            for spelling in _spellings(food):
+                self._by_spelling.setdefault(spelling, food)
+
+    def find(self, name: str) -> JSON | None:
+        return self._by_spelling.get(name.strip().casefold())
+
+
 class UnitResolver:
     """Maps what users type ("Liter", "l", "Stk") to a Mealie unit."""
 
@@ -92,15 +105,19 @@ class ShoppingService:
         client: MealieClient,
         default_list: str | None = None,
         unit_cache_seconds: float = 600,
+        food_recheck_seconds: float = 60,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._client = client
         self._default_list = default_list
         self._selected: dict[int, str] = {}
         self._unit_cache_seconds = unit_cache_seconds
+        self._food_recheck_seconds = food_recheck_seconds
         self._clock = clock
         self._units: UnitResolver | None = None
         self._units_loaded_at = 0.0
+        self._foods: FoodIndex | None = None
+        self._foods_loaded_at = 0.0
 
     # --- lists ------------------------------------------------------------
 
@@ -139,12 +156,21 @@ class ShoppingService:
             self._units_loaded_at = now
         return self._units
 
+    async def foods(self, *, reload: bool = False) -> FoodIndex:
+        """All Mealie foods, cached like the units; ``reload`` forces a fresh copy."""
+        now = self._clock()
+        if self._foods is None or reload or now - self._foods_loaded_at > self._unit_cache_seconds:
+            self._foods = FoodIndex(await self._client.get_foods())
+            self._foods_loaded_at = now
+        return self._foods
+
     async def find_food(self, name: str) -> JSON | None:
-        folded = name.casefold()
-        for food in await self._client.search_foods(name):
-            if folded in _spellings(food):
-                return food
-        return None
+        """Exact match among all foods. A miss on a cache older than a minute
+        reloads the foods once, so a food just created in Mealie is found."""
+        food = (await self.foods()).find(name)
+        if food is None and self._clock() - self._foods_loaded_at > self._food_recheck_seconds:
+            food = (await self.foods(reload=True)).find(name)
+        return food
 
     async def build_item(self, list_id: str, entry: ParsedEntry) -> JSON:
         units = await self.units()
@@ -155,19 +181,21 @@ class ShoppingService:
             "note": "",
         }
         unit = units.resolve(entry.unit) if entry.unit else None
-        if entry.unit and unit is None:
-            # Unknown unit: keep everything as free text so nothing is lost.
-            item["note"] = f"{entry.unit} {entry.name}"
-            return item
         if unit is not None:
             item["unitId"] = unit["id"]
         food = await self.find_food(entry.name)
         if food is None:
-            item["note"] = entry.name
+            # Unknown food: keep everything as free text so nothing is lost.
+            item["note"] = (
+                f"{entry.unit} {entry.name}" if entry.unit and unit is None else entry.name
+            )
         else:
             item["foodId"] = food["id"]
             if food.get("labelId"):
                 item["labelId"] = food["labelId"]
+            if entry.unit and unit is None:
+                # Unknown unit: the food keeps its category, the unit goes into the note.
+                item["note"] = entry.unit
         return item
 
     async def add_entries(self, list_id: str, entries: list[ParsedEntry]) -> AddResult:
