@@ -1,6 +1,5 @@
 from datetime import datetime
 
-from mealie_bot.features.shopping.parser import ParsedEntry
 from mealie_bot.features.shopping.render import (
     MAX_ITEM_BUTTONS,
     MAX_QUOTE_ITEMS,
@@ -10,7 +9,6 @@ from mealie_bot.features.shopping.render import (
     ItemAction,
     ListAction,
     ListState,
-    entry_display,
     format_quantity,
     item_display,
     item_html,
@@ -218,7 +216,6 @@ def test_quantities_and_progress():
     assert format_quantity(1.25, "en") == "1.25"
     assert format_quantity(0.333, "de") == "⅓"
     assert format_quantity(0.123456, "de") == "0,12"
-    assert entry_display(ParsedEntry("milk", 2, "l"), "en") == "2 l milk"
     assert progress_bar(0, 0) == "▱" * 10
     assert progress_bar(1, 3) == "▰▰▰▱▱▱▱▱▱▱"
     assert progress_bar(1, 40) == "▰" + "▱" * 9  # something done shows
