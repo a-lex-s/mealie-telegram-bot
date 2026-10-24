@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- Enabled the ruff rule sets `C4`, `PIE`, `PTH`, `RET`, `PERF`, `LOG`, `G`, `DTZ`, `S` and `PT`.
+  No change in the bot itself: test-only fixes, test-specific ignores and two narrow `noqa`s.
 
 ## [0.2.0] - 2026-10-24
 
