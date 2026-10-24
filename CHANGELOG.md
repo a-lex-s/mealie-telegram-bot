@@ -29,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A change in one chat no longer fetches the list again for every other chat
+  that shows it: the other live messages are rendered from the list the
+  changing chat just loaded.
 - CI checks every Mealie API path and request field the bot uses against a
   trimmed copy of the Mealie 3.29.0 OpenAPI document in `tests/data/`
   (`scripts/trim_openapi.py` refreshes it); before, the test was skipped

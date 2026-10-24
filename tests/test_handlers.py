@@ -125,13 +125,14 @@ def mock_list(mealie_mock, *items):
     )
 
 
-def message(text, user_id=ALICE, language="en", message_id=1):
+def message(text, user_id=ALICE, language="en", message_id=1, chat_id=None):
+    chat = Chat(id=user_id, type="private") if chat_id is None else Chat(id=chat_id, type="group")
     return Update(
         update_id=1,
         message=Message(
             message_id=message_id,
             date=datetime.now(UTC),
-            chat=Chat(id=user_id, type="private"),
+            chat=chat,
             from_user=User(id=user_id, is_bot=False, first_name="Alice", language_code=language),
             text=text,
         ),
@@ -940,6 +941,87 @@ async def test_list_choice_is_per_chat(harness, mealie_mock):
     assert "<b>Z</b>" in session.last(EditMessageText).text
     await feed(message("/list", user_id=BOB))
     assert "<b>Groceries</b>" in session.last(SendMessage).text
+
+
+GROUP = -5001
+
+
+async def test_sync_reuses_the_loaded_list_for_every_other_chat(harness, mealie_mock):
+    feed, session = harness
+    item = make_item("i-1", "Milk")
+    route = mock_list(mealie_mock, item, make_item("i-2", "Eggs"))
+    await feed(message("/list", user_id=ALICE))
+    await feed(message("/list", user_id=BOB, language="de"))
+    bob_list = session.next_id
+    await feed(message("/list", user_id=BOB, chat_id=GROUP))
+    group_list = session.next_id
+    mealie_mock.get("/api/households/shopping/items/i-1").respond(json=item)
+    mealie_mock.put("/api/households/shopping/items/i-1").respond(json={})
+    route.respond(
+        json={
+            "id": LIST_ID,
+            "name": "Groceries",
+            "listItems": [{**item, "checked": True}, make_item("i-2", "Eggs")],
+        }
+    )
+    before = route.call_count
+    await feed(
+        callback(ItemAction(action="check", item_id="i-1", view=VIEW_OPEN).pack(), user_id=ALICE)
+    )
+    # One list request for Alice's refresh; Bob's chat and the group reuse it.
+    assert route.call_count - before == 1
+    edits = {e.message_id: e for e in session.sent(EditMessageText)}
+    assert "1 erledigt" in edits[bob_list].text  # Bob's chat, in Bob's language
+    assert "1 done" in edits[group_list].text
+
+
+async def test_sync_leaves_chats_on_another_list_alone(harness, mealie_mock):
+    feed, session = harness
+    mealie_mock.get("/api/households/shopping/lists").respond(
+        json={"items": [{"id": LIST_ID, "name": "Groceries"}, {"id": OTHER_LIST_ID, "name": "Z"}]}
+    )
+    item = make_item("i-1", "Milk")
+    route = mock_list(mealie_mock, item)
+    other = mealie_mock.get(f"/api/households/shopping/lists/{OTHER_LIST_ID}").respond(
+        json={"id": OTHER_LIST_ID, "name": "Z", "listItems": []}
+    )
+    await feed(message("/list", user_id=ALICE))
+    await feed(callback(SelectList(list_id=OTHER_LIST_ID).pack(), user_id=BOB, message_id=50))
+    other_calls = other.call_count
+    mealie_mock.get("/api/households/shopping/items/i-1").respond(json=item)
+    mealie_mock.put("/api/households/shopping/items/i-1").respond(json={})
+    before = route.call_count
+    edits = len(session.sent(EditMessageText))
+    await feed(
+        callback(ItemAction(action="check", item_id="i-1", view=VIEW_OPEN).pack(), user_id=ALICE)
+    )
+    assert route.call_count - before == 1 and other.call_count == other_calls
+    assert [e.message_id for e in session.sent(EditMessageText)[edits:]] == [5]
+
+
+async def test_sync_after_a_failed_refresh_asks_mealie_again(harness, mealie_mock):
+    feed, session = harness
+    item = make_item("i-1", "Milk")
+    route = mock_list(mealie_mock, item)
+    await feed(message("/list", user_id=ALICE))
+    await feed(message("/list", user_id=BOB, language="de"))
+    bob_list = session.next_id
+    mealie_mock.get("/api/households/shopping/items/i-1").respond(json=item)
+    mealie_mock.put("/api/households/shopping/items/i-1").respond(json={})
+    route.side_effect = [
+        httpx.Response(500),
+        httpx.Response(
+            200,
+            json={"id": LIST_ID, "name": "Groceries", "listItems": [{**item, "checked": True}]},
+        ),
+    ]
+    await feed(
+        callback(ItemAction(action="check", item_id="i-1", view=VIEW_OPEN).pack(), user_id=ALICE)
+    )
+    # Alice's refresh failed; Bob's chat is not rendered from the copy from
+    # before the change but fetched anew.
+    bob = [e for e in session.sent(EditMessageText) if e.message_id == bob_list]
+    assert bob and "1 erledigt" in bob[-1].text
 
 
 # --- categories -------------------------------------------------------------

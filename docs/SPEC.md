@@ -290,6 +290,9 @@ is shown; taps and changes from the other chat edit it in place.
   chats the bot knows since its start, if they show the same list: quietly,
   in place and in each chat's language. The other person sees the current
   list when they look at the chat; no message is sent and nothing beeps.
+  The other chats are rendered from the list the changing chat fetched right
+  after the change, so a change costs one list request however many chats
+  show the list; if that fetch failed, each chat fetches on its own.
 * Item buttons and category headers share a budget of 80 buttons (Telegram
   allows 100 per message); items beyond it are counted in the text. Quotes
   (*Added*, *Done*, the removal question) list at most 20 items and count the

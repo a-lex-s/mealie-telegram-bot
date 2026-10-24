@@ -148,16 +148,23 @@ class ShoppingUI:
         return state.list_id
 
     async def render(
-        self, chat_id: int, state: ListState, tr: Translator, cached: bool = False
+        self,
+        chat_id: int,
+        state: ListState,
+        tr: Translator,
+        cached: bool = False,
+        loaded: tuple[ListView, datetime] | None = None,
     ) -> tuple[str, InlineKeyboardMarkup, str]:
+        """Render a list message. ``cached`` reuses this chat's last fetch;
+        ``loaded`` is a fetch another chat just made, used if it is the same list."""
         try:
             list_id = await self.list_id(chat_id, state)
-            data, now = await self._view(chat_id, list_id, cached)
+            data, now = await self._view(chat_id, list_id, cached, loaded)
         except MealieNotFound:
             # The list was deleted in Mealie: fall back to whatever is active now.
             state.list_id = None
             list_id = await self.list_id(chat_id, state)
-            data, now = await self._view(chat_id, list_id, cached)
+            data, now = await self._view(chat_id, list_id, cached, loaded)
         lists = await self.service.lists() if state.view == VIEW_LISTS else None
         text, markup = render_list(
             data.name,
@@ -174,10 +181,22 @@ class ShoppingUI:
         self.chat(chat_id).language = tr.language
         return text, markup, data.name
 
-    async def _view(self, chat_id: int, list_id: str, cached: bool) -> tuple[ListView, datetime]:
-        """The list's items, from the chat's cache when ``cached`` and it is the same list."""
+    async def _view(
+        self,
+        chat_id: int,
+        list_id: str,
+        cached: bool,
+        loaded: tuple[ListView, datetime] | None = None,
+    ) -> tuple[ListView, datetime]:
+        """The list's items: from ``loaded`` or, when ``cached``, from the chat's
+        cache if that is the same list; otherwise fetched from Mealie."""
+        if loaded is not None and loaded[0].id == list_id:
+            self.cache[chat_id] = loaded
+            return loaded
         if cached and chat_id in self.cache and self.cache[chat_id][0].id == list_id:
             return self.cache[chat_id]
+        # Dropped first, so a failed fetch leaves no outdated copy to sync from.
+        self.cache.pop(chat_id, None)
         data, now = await self.service.view(list_id), self.clock()
         self.cache[chat_id] = (data, now)
         return data, now
@@ -218,10 +237,15 @@ class ShoppingUI:
     async def sync_others(self, bot: Bot | None, origin_chat_id: int) -> None:
         """After a change in one chat, re-render the live messages of the other chats
         that show the same list, quietly and in their own language. There is no
-        notification; the other person sees the change when they look."""
+        notification; the other person sees the change when they look.
+
+        The list the origin chat fetched right after the change is reused, so a
+        change costs one Mealie request however many chats show the list.
+        """
         origin = self.chat(origin_chat_id)
         if bot is None or origin.live_list_id is None:
             return
+        loaded = self.cache.get(origin_chat_id)
         for chat_id, chat in list(self.chats.items()):
             if chat_id == origin_chat_id or chat.live_message_id is None:
                 continue
@@ -230,7 +254,7 @@ class ShoppingUI:
             try:
                 tr = Translator(chat.language)
                 state = chat.state_for(chat.live_message_id)
-                text, markup, _ = await self.render(chat_id, state, tr)
+                text, markup, _ = await self.render(chat_id, state, tr, loaded=loaded)
                 with suppress(*_TELEGRAM_ERRORS):
                     if not await _edit(bot, chat_id, chat.live_message_id, text, markup):
                         # Deleted on both sides: the chat has no live message any more.
