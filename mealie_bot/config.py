@@ -85,6 +85,8 @@ class Settings:
     allowed_user_ids: frozenset[int]
     bot_language: str | None = None
     shopping_list: str | None = None
+    # SHOPPING_CREATE_FOODS: create a food (without label) for unknown item names.
+    shopping_create_foods: bool = False
     features: frozenset[str] = frozenset({"shopping"})
     delete_commands: bool = True
     delete_item_messages: bool = True
@@ -144,6 +146,7 @@ class Settings:
             allowed_user_ids=_user_ids(_required(env, "ALLOWED_USER_IDS")),
             bot_language=language,
             shopping_list=_read(env, "SHOPPING_LIST"),
+            shopping_create_foods=_bool(env, "SHOPPING_CREATE_FOODS", False),
             features=features,
             delete_commands=_bool(env, "DELETE_COMMANDS", True),
             delete_item_messages=_bool(env, "DELETE_ITEM_MESSAGES", True),

@@ -86,6 +86,7 @@ def test_options():
             "BOT_LANGUAGE": "DE",
             "FEATURE_SHOPPING": "false",
             "SHOPPING_LIST": "Groceries",
+            "SHOPPING_CREATE_FOODS": "true",
             "LOG_LEVEL": "debug",
             "DELETE_COMMANDS": "no",
             "DELETE_ITEM_MESSAGES": "0",
@@ -101,6 +102,8 @@ def test_options():
     assert settings.bot_language == "de"
     assert settings.features == frozenset()
     assert settings.shopping_list == "Groceries"
+    assert settings.shopping_create_foods is True
+    assert Settings.from_env(BASE).shopping_create_foods is False
     assert settings.log_level == "DEBUG"
 
 

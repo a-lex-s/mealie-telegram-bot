@@ -49,6 +49,8 @@ MESSAGES: dict[str, str] = {
         "<code>Senf, Mayo → Würzmittel</code>). "
         "Eine neue Kategorie wird nach Rückfrage angelegt; ein Produkt, das Mealie noch "
         "nicht kennt, ebenfalls.\n"
+        "Unter <i>Sonstiges</i> geht <b>🏷️ Einsortieren</b> die Einträge einzeln durch, "
+        "ein Tipp pro Produkt.\n"
         "/{category} legt eine Kategorie an, /{categories} zeigt alle.\n\n"
         "<blockquote expandable>💡 <b>So verhält sich die Liste</b>\n"
         "Es gibt immer eine Listen-Nachricht, ganz unten im Chat. "
@@ -104,6 +106,29 @@ MESSAGES: dict[str, str] = {
     "assign.btn_food_use": "Ja, {food}",
     "assign.btn_food_new": "➕ Nein, {name} anlegen",
     "assign.stale": "⚠️ Die Frage ist nicht mehr offen. Bitte schick die Zeile noch einmal.",
+    # Sort picker (button under "Other")
+    "sort.btn_start": "🏷️ Einsortieren ({count})",
+    "sort.header": "🏷️ <b>Einsortieren</b> · {index} von {total}",
+    "sort.question": "<b>{item}</b> · <i>Welche Kategorie?</i>",
+    "sort.no_labels": "<i>Es gibt noch keine Kategorien. Leg die erste an.</i>",
+    "sort.more_labels": (
+        "<i>… und {count} weitere Kategorien: dafür <code>Produkt → Kategorie</code> schicken.</i>"
+    ),
+    "sort.more_labels.one": (
+        "<i>… und 1 weitere Kategorie: dafür <code>Produkt → Kategorie</code> schicken.</i>"
+    ),
+    "sort.btn_food_back": "↩️ Andere Kategorie",
+    "sort.food_gone": "⚠️ Dieses Produkt gibt es nicht mehr",
+    "sort.btn_new": "➕ Neue Kategorie…",
+    "sort.btn_skip": "⏭ Überspringen",
+    "sort.btn_back": "✕ Zurück zur Liste",
+    "sort.toast_sorted": "✅ {item} → {label}",
+    "sort.nothing": "Nichts mehr einzusortieren",
+    "sort.stale": "⚠️ Das Einsortieren ist nicht mehr offen",
+    "sort.label_gone": "⚠️ Diese Kategorie gibt es nicht mehr",
+    "sort.ask_name": "✏️ Wie soll die neue Kategorie heißen? Antworte mit dem Namen.",
+    "sort.ask_name_user": ("✏️ {user}, wie soll die neue Kategorie heißen? Antworte mit dem Namen."),
+    "sort.name_placeholder": "Name der Kategorie",
     "error.unknown_command": "Den Befehl kenne ich nicht. /hilfe zeigt, was ich kann.",
     "shopping.list_header": "🛒 <b>{list}</b>",
     "shopping.count_open": "{count} offen",

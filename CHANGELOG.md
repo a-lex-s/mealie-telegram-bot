@@ -26,6 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the next time the list is shown. The start-up log line shows the commit too.
 - `LABEL_ICONS` (`both`, `color`, `emoji`, `none`) chooses what is shown in
   front of category names.
+- *🏷️ Sort (n)* under an open *Other* turns the list message into a picker
+  that goes through the uncategorised items one by one: one button per
+  category (suggested ones first), *New category…* with a reply prompt,
+  *Skip* and *Back to the list*; *Undo* reverts the whole round. For a note
+  that looks like an existing product it asks "did you mean" first.
+- `SHOPPING_CREATE_FOODS` (default `false`) creates a Mealie food without a
+  category for unknown item names, so they can be sorted later; *Undo*
+  deletes them again.
 
 ### Changed
 

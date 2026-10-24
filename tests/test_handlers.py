@@ -28,6 +28,7 @@ from mealie_bot.features.shopping.render import (
     ItemAction,
     ListAction,
     SelectList,
+    SortAction,
 )
 from mealie_bot.mealie import MealieClient
 from mealie_bot.telegram.app import build_dispatcher, register_commands
@@ -125,7 +126,7 @@ def mock_list(mealie_mock, *items):
     )
 
 
-def message(text, user_id=ALICE, language="en", message_id=1, chat_id=None):
+def message(text, user_id=ALICE, language="en", message_id=1, chat_id=None, reply_to=None):
     chat = Chat(id=user_id, type="private") if chat_id is None else Chat(id=chat_id, type="group")
     return Update(
         update_id=1,
@@ -135,6 +136,7 @@ def message(text, user_id=ALICE, language="en", message_id=1, chat_id=None):
             chat=chat,
             from_user=User(id=user_id, is_bot=False, first_name="Alice", language_code=language),
             text=text,
+            reply_to_message=reply_to,
         ),
     )
 
@@ -152,7 +154,7 @@ def callback(data, user_id=ALICE, message_id=5, language="de", chat_id=None):
             message=Message(
                 message_id=message_id,
                 date=datetime.now(UTC),
-                chat=Chat(id=chat_id, type="private"),
+                chat=Chat(id=chat_id, type="group" if chat_id < 0 else "private"),
                 from_user=user,
                 text="old",
             ),
@@ -310,6 +312,34 @@ async def test_undo_deletes_created_and_restores_merged_items(harness, mealie_mo
 
     await feed(callback(ListAction(action="undo").pack(), message_id=list_message_id))
     assert "Nichts mehr" in session.last(AnswerCallbackQuery).text
+
+
+@pytest.mark.parametrize("harness", [{"shopping_create_foods": True}], indirect=True)
+async def test_created_foods_land_in_other_and_undo_deletes_them(harness, mealie_mock):
+    feed, session = harness
+    mock_list(mealie_mock)
+    foods = mealie_mock.post("/api/foods").respond(201, json={"id": "f-new", "name": "Ketchup"})
+    created = make_item("n-1", "Ketchup", foodId="f-new", food={"id": "f-new", "name": "Ketchup"})
+    bulk = mealie_mock.post("/api/households/shopping/items/create-bulk").respond(
+        201, json={"createdItems": [created]}
+    )
+    await feed(message("Ketchup"))
+    assert json.loads(foods.calls.last.request.content) == {"name": "Ketchup"}
+    assert json.loads(bulk.calls.last.request.content)[0]["foodId"] == "f-new"
+    assert "<b>Ketchup</b> · <i>📦 Other</i>" in session.last(SendMessage).text
+
+    mealie_mock.delete("/api/households/shopping/items").respond(json={})
+    delete_food = mealie_mock.delete("/api/foods/f-new").respond(json={})
+    await feed(callback(ListAction(action="undo").pack(), message_id=session.next_id))
+    assert delete_food.called
+
+
+@pytest.mark.parametrize("harness", [{"shopping_create_foods": True}], indirect=True)
+async def test_unparseable_text_creates_no_food(harness, mealie_mock):
+    feed, _ = harness
+    foods = mealie_mock.post("/api/foods").respond(201, json={"id": "f"})
+    await feed(message(" , ; "))
+    assert not foods.called
 
 
 async def test_unparseable_text(harness, mealie_mock):
@@ -1255,3 +1285,281 @@ async def test_label_icons_none_shows_plain_category_names(harness, mealie_mock)
     mock_list(mealie_mock, soap, make_item("i-2", "Milk"))
     await feed(message("/list"))
     assert buttons(session.last(SendMessage))[:2] == ["Eigenes (1) ▸", "Other (1) ▸"]
+
+
+# --- sort picker ------------------------------------------------------------
+
+DAIRY = {"id": "lab-2", "name": "Milchprodukte", "color": "#5bc0de", "groupId": "g"}
+MILK_FOOD = {"id": "f-milk", "name": "Milch", "labelId": None, "aliases": [], "substitutions": []}
+
+
+def other_items():
+    return [
+        make_item("i-1", "Ketchup", note="Ketchup", position=1),
+        make_item(
+            "i-2", "Milch", foodId="f-milk", food={"id": "f-milk", "name": "Milch"}, position=2
+        ),
+    ]
+
+
+def sort_tap(action, message_id, arg="", language="de", user_id=ALICE):
+    return callback(
+        SortAction(action=action, arg=arg).pack(),
+        message_id=message_id,
+        language=language,
+        user_id=user_id,
+    )
+
+
+async def open_picker(feed, session, mealie_mock):
+    mock_categories(mealie_mock, labels=(LABEL, DAIRY), foods=[MILK_FOOD])
+    route = mock_list(mealie_mock, *other_items())
+    await feed(message("/liste", language="de"))
+    list_id = session.next_id
+    start = session.last(SendMessage).reply_markup.inline_keyboard[-2][0]
+    assert start.text == "🏷️ Einsortieren (2)"
+    await feed(callback(start.callback_data, message_id=list_id))
+    return list_id, route
+
+
+async def test_sort_button_opens_the_picker_in_the_list_message(harness, mealie_mock):
+    feed, session = harness
+    list_id, _ = await open_picker(feed, session, mealie_mock)
+    picker = session.last(EditMessageText)
+    assert picker.message_id == list_id
+    assert "🏷️ <b>Einsortieren</b> · 1 von 2\n<b>Ketchup</b> · <i>Welche Kategorie?</i>" in (
+        picker.text
+    )
+    assert buttons(picker) == [
+        "🔵 🥛 Milchprodukte",
+        "🟣 🧂 Würzmittel",
+        "➕ Neue Kategorie…",
+        "⏭ Überspringen",
+        "✕ Zurück zur Liste",
+    ]
+    # No new message in the chat: only the list itself was sent.
+    assert len(session.sent(SendMessage)) == 1
+
+
+async def test_picking_sorts_one_item_after_the_other_and_ends_with_undo(harness, mealie_mock):
+    feed, session = harness
+    list_id, route = await open_picker(feed, session, mealie_mock)
+    create_food = mealie_mock.post("/api/foods").respond(
+        201, json={"id": "f-k", "name": "Ketchup", "labelId": "lab-1"}
+    )
+    put_ketchup = mealie_mock.put("/api/households/shopping/items/i-1").respond(json={})
+    await feed(sort_tap("pick", list_id, "lab-1"))
+    assert json.loads(create_food.calls.last.request.content) == {
+        "name": "Ketchup",
+        "labelId": "lab-1",
+    }
+    assert json.loads(put_ketchup.calls.last.request.content)["foodId"] == "f-k"
+    assert session.last(AnswerCallbackQuery).text == "✅ Ketchup → 🟣 🧂 Würzmittel"
+    picker = session.last(EditMessageText)
+    assert "2 von 2" in picker.text and "<b>Milch</b>" in picker.text
+    # The keyword table suggests the dairy category for milk.
+    assert buttons(picker)[0] == "🔵 🥛 Milchprodukte"
+
+    put_food = mealie_mock.put("/api/foods/f-milk").respond(json={})
+    put_milk = mealie_mock.put("/api/households/shopping/items/i-2").respond(json={})
+    sorted_items = [
+        make_item("i-1", "Ketchup", label="Würzmittel"),
+        make_item("i-2", "Milch", label="Milchprodukte"),
+    ]
+    route.side_effect = lambda request: httpx.Response(
+        200,
+        json={
+            "id": LIST_ID,
+            "name": "Groceries",
+            "listItems": sorted_items if put_milk.called else other_items(),
+        },
+    )
+    await feed(sort_tap("pick", list_id, "lab-2"))
+    # The whole food goes back, only the label changes.
+    assert json.loads(put_food.calls.last.request.content) == {**MILK_FOOD, "labelId": "lab-2"}
+    done = session.last(EditMessageText)
+    assert "🏷️ <b>Einsortiert</b> (2)" in done.text
+    assert done.reply_markup.inline_keyboard[-1][0].text == "↩️ Rückgängig"
+
+    delete_food = mealie_mock.delete("/api/foods/f-k").respond(204)
+    await feed(callback(ListAction(action="undo").pack(), message_id=list_id))
+    assert delete_food.called
+    assert json.loads(put_food.calls.last.request.content)["labelId"] is None
+    assert "2 Einträge rückgängig" in session.last(AnswerCallbackQuery).text
+
+
+async def test_skip_and_back_return_to_the_list(harness, mealie_mock):
+    feed, session = harness
+    list_id, _ = await open_picker(feed, session, mealie_mock)
+    await feed(sort_tap("skip", list_id))
+    assert "2 von 2" in session.last(EditMessageText).text
+    await feed(sort_tap("back", list_id))
+    back = session.last(EditMessageText)
+    assert "Einsortieren</b> ·" not in back.text and "Einsortiert" not in back.text
+    assert back.reply_markup.inline_keyboard[-1][0].text == "🔄 Aktualisieren"
+    # A tap on the closed picker is answered and changes nothing in Mealie.
+    await feed(sort_tap("pick", list_id, "lab-1"))
+    assert "nicht mehr offen" in session.last(AnswerCallbackQuery).text
+
+
+KETCHUP_FOOD = {"id": "f-k", "name": "Ketchup", "labelId": None, "aliases": []}
+
+
+async def open_picker_with_typo(feed, session, mealie_mock):
+    """Picker on a note item "Ketschup" while the product "Ketchup" exists."""
+    mock_categories(mealie_mock, labels=(LABEL, DAIRY), foods=[MILK_FOOD, KETCHUP_FOOD])
+    mock_list(mealie_mock, make_item("i-1", "Ketschup", note="Ketschup", position=1))
+    await feed(message("/liste", language="de"))
+    list_id = session.next_id
+    await feed(sort_tap("start", list_id))
+    await feed(sort_tap("pick", list_id, "lab-1"))
+    return list_id
+
+
+async def test_picker_asks_before_creating_a_product_like_an_existing_one(harness, mealie_mock):
+    feed, session = harness
+    create_food = mealie_mock.post("/api/foods").respond(201, json={})
+    list_id = await open_picker_with_typo(feed, session, mealie_mock)
+    question = session.last(EditMessageText)
+    assert question.message_id == list_id
+    assert "❓ <b>Ketschup</b> kenne ich nicht. Meinst du <b>Ketchup</b>?" in question.text
+    assert buttons(question) == ["Ja, Ketchup", "➕ Nein, Ketschup anlegen", "↩️ Andere Kategorie"]
+    assert not create_food.called
+    assert not session.last(AnswerCallbackQuery).text
+
+    put_food = mealie_mock.put("/api/foods/f-k").respond(json={**KETCHUP_FOOD, "labelId": "lab-1"})
+    put_item = mealie_mock.put("/api/households/shopping/items/i-1").respond(json={})
+    await feed(sort_tap("food_use", list_id, "f-k"))
+    assert json.loads(put_food.calls.last.request.content)["labelId"] == "lab-1"
+    assert json.loads(put_item.calls.last.request.content)["foodId"] == "f-k"
+    assert not create_food.called
+    assert session.last(AnswerCallbackQuery).text == "✅ Ketchup → 🟣 🧂 Würzmittel"
+
+
+async def test_picker_creates_the_typed_product_when_asked_to(harness, mealie_mock):
+    feed, session = harness
+    list_id = await open_picker_with_typo(feed, session, mealie_mock)
+    await feed(sort_tap("food_back", list_id))
+    assert "<i>Welche Kategorie?</i>" in session.last(EditMessageText).text
+    await feed(sort_tap("pick", list_id, "lab-1"))
+    create_food = mealie_mock.post("/api/foods").respond(
+        201, json={"id": "f-new", "name": "Ketschup", "labelId": "lab-1"}
+    )
+    put_item = mealie_mock.put("/api/households/shopping/items/i-1").respond(json={})
+    await feed(sort_tap("food_new", list_id))
+    assert json.loads(create_food.calls.last.request.content)["name"] == "Ketschup"
+    assert json.loads(put_item.calls.last.request.content)["foodId"] == "f-new"
+    assert session.last(AnswerCallbackQuery).text == "✅ Ketschup → 🟣 🧂 Würzmittel"
+
+
+async def test_picker_food_answer_that_no_longer_fits(harness, mealie_mock):
+    feed, session = harness
+    list_id = await open_picker_with_typo(feed, session, mealie_mock)
+    # A product Mealie no longer knows (deleted in the meantime).
+    await feed(sort_tap("food_use", list_id, "f-gone"))
+    assert session.last(AnswerCallbackQuery).text == "⚠️ Dieses Produkt gibt es nicht mehr"
+    assert "<i>Welche Kategorie?</i>" in session.last(EditMessageText).text
+    # Without an open question the answer is stale.
+    await feed(sort_tap("food_new", list_id))
+    assert "nicht mehr offen" in session.last(AnswerCallbackQuery).text
+
+
+async def test_new_category_is_asked_with_a_reply_prompt(harness, mealie_mock):
+    feed, session = harness
+    list_id, _ = await open_picker(feed, session, mealie_mock)
+    await feed(sort_tap("new", list_id))
+    prompt = session.last(SendMessage)
+    assert prompt.text.startswith("✏️ Wie soll die neue Kategorie heißen?")
+    assert prompt.reply_markup.force_reply and prompt.reply_markup.selective
+    prompt_id = session.next_id
+
+    create_label = mealie_mock.post("/api/groups/labels").respond(
+        201, json={"id": "lab-3", "name": "Saucen", "color": "#9b7bb8", "groupId": "g"}
+    )
+    mealie_mock.post("/api/foods").respond(201, json={"id": "f-k", "name": "Ketchup"})
+    mealie_mock.put("/api/households/shopping/items/i-1").respond(json={})
+    bulk = mealie_mock.post("/api/households/shopping/items/create-bulk")
+    prompt_message = Message(
+        message_id=prompt_id,
+        date=datetime.now(UTC),
+        chat=Chat(id=ALICE, type="private"),
+        text=prompt.text,
+    )
+    await feed(message("Saucen", language="de", message_id=30, reply_to=prompt_message))
+    assert json.loads(create_label.calls.last.request.content)["name"] == "Saucen"
+    deleted = [d.message_id for d in session.sent(DeleteMessage)]
+    assert prompt_id in deleted and 30 in deleted
+    picker = session.last(EditMessageText)
+    assert picker.message_id == list_id and "2 von 2" in picker.text
+    # The reply names the category; it adds no item.
+    assert not bulk.called
+
+
+async def test_new_category_prompt_mentions_the_user_in_a_group(harness, mealie_mock):
+    feed, session = harness
+    mock_categories(mealie_mock)
+    mock_list(mealie_mock, *other_items())
+    await feed(message("/list", chat_id=GROUP))
+    list_id = session.next_id
+    await feed(
+        callback(
+            SortAction(action="start").pack(), message_id=list_id, chat_id=GROUP, language="en"
+        )
+    )
+    await feed(
+        callback(SortAction(action="new").pack(), message_id=list_id, chat_id=GROUP, language="en")
+    )
+    prompt = session.last(SendMessage)
+    assert prompt.text.startswith(f'✏️ <a href="tg://user?id={ALICE}">Bob</a>, what should')
+
+
+async def test_picker_taps_on_a_changed_list(harness, mealie_mock):
+    feed, session = harness
+    list_id, route = await open_picker(feed, session, mealie_mock)
+    await feed(sort_tap("pick", list_id, "lab-gone"))
+    assert session.last(AnswerCallbackQuery).text == "⚠️ Diese Kategorie gibt es nicht mehr"
+    # Both items were sorted elsewhere meanwhile: the picker closes.
+    route.respond(
+        json={"id": LIST_ID, "name": "Groceries", "listItems": [make_item("i-1", "K", label="X")]}
+    )
+    await feed(sort_tap("pick", list_id, "lab-1"))
+    assert session.last(AnswerCallbackQuery).text == "Nichts mehr einzusortieren"
+    assert "Einsortieren</b> ·" not in session.last(EditMessageText).text
+    await feed(sort_tap("start", list_id))
+    assert session.last(AnswerCallbackQuery).text == "Nichts mehr einzusortieren"
+
+
+async def test_picker_tap_while_mealie_is_down(harness, mealie_mock):
+    feed, session = harness
+    list_id, route = await open_picker(feed, session, mealie_mock)
+    route.respond(500)
+    await feed(sort_tap("pick", list_id, "lab-1"))
+    assert session.last(AnswerCallbackQuery).show_alert
+
+
+def _reply_to(prompt_id):
+    return Message(
+        message_id=prompt_id, date=datetime.now(UTC), chat=Chat(id=ALICE, type="private"), text="?"
+    )
+
+
+async def test_category_name_reply_edge_cases(harness, mealie_mock):
+    feed, session = harness
+    list_id, _ = await open_picker(feed, session, mealie_mock)
+    await feed(sort_tap("new", list_id))
+    prompt_id = session.next_id
+    await feed(message("x" * 41, language="de", message_id=31, reply_to=_reply_to(prompt_id)))
+    assert "höchstens 40 Zeichen" in session.last(SendMessage).text
+    # Mealie down: the user gets the error, the prompt stays open.
+    create = mealie_mock.post("/api/groups/labels").respond(500)
+    await feed(message("Saucen", language="de", message_id=32, reply_to=_reply_to(prompt_id)))
+    assert "Mealie" in session.last(SendMessage).text and create.call_count == 1
+    # Closing the picker deletes the prompt; a late reply is just ignored as a
+    # reply and treated as items, so nothing is created as a category.
+    await feed(sort_tap("back", list_id))
+    assert prompt_id in [d.message_id for d in session.sent(DeleteMessage)]
+    mealie_mock.post("/api/households/shopping/items/create-bulk").respond(
+        201, json={"createdItems": []}
+    )
+    await feed(message("Saucen", language="de", message_id=33, reply_to=_reply_to(prompt_id)))
+    assert create.call_count == 1

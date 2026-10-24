@@ -13,6 +13,7 @@ readable by that user (Compose bind-mounts it with its host permissions).
 | `MEALIE_URL` | no | `http://mealie:9000` | Mealie base URL as seen from the bot |
 | `BOT_LANGUAGE` | no | per user | Force `en` or `de` for everybody |
 | `SHOPPING_LIST` | no | first list | Default list, by name or ID |
+| `SHOPPING_CREATE_FOODS` | no | `false` | Create a Mealie food for item names Mealie does not know yet (without a category, so the item lands under *Other* ready for sorting); `false` stores them as a note on the item |
 | `FEATURE_SHOPPING` | no | `true` | Enable the shopping list feature |
 | `DELETE_COMMANDS` | no | `true` | Delete your `/list`, `/lists`, `/clear`, `/category`, `/categories`, `/version` messages right away, so only the list stays in the chat; set `false` to keep them |
 | `DELETE_ITEM_MESSAGES` | no | `true` | Delete your item messages (`2 l milk, eggs`) once the items are on the list; set `false` to keep them |

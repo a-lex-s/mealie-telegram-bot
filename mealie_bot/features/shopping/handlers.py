@@ -33,7 +33,13 @@ from aiogram import Bot, F, Router
 from aiogram.enums import ChatAction
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command, CommandObject
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import (
+    CallbackQuery,
+    ForceReply,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 
 from mealie_bot.features import FeatureContext, TransientMessages
 from mealie_bot.features.shopping.parser import (
@@ -53,13 +59,17 @@ from mealie_bot.features.shopping.render import (
     VIEW_DONE,
     VIEW_LISTS,
     VIEW_OPEN,
+    VIEW_SORT,
     AssignAnswer,
     ItemAction,
     ListAction,
     ListState,
     SelectList,
+    SortAction,
+    SortQuestion,
     item_display,
     item_inline,
+    item_parts,
     label_dict_text,
     label_key,
     label_text,
@@ -82,6 +92,7 @@ from mealie_bot.features.shopping.state import (
 from mealie_bot.i18n import Translator, command_names
 from mealie_bot.i18n.labels import LabelIcons
 from mealie_bot.mealie import MealieError, MealieNotFound
+from mealie_bot.mealie.client import JSON
 
 log = logging.getLogger(__name__)
 
@@ -165,7 +176,10 @@ class ShoppingUI:
             state.list_id = None
             list_id = await self.list_id(chat_id, state)
             data, now = await self._view(chat_id, list_id, cached, loaded)
+        if state.view == VIEW_SORT and state.sort_current(data.items) is None:
+            state.finish_sort()  # everything sorted, skipped or gone meanwhile
         lists = await self.service.lists() if state.view == VIEW_LISTS else None
+        labels = (await self.service.labels()).labels if state.view == VIEW_SORT else None
         text, markup = render_list(
             data.name,
             data.items,
@@ -176,10 +190,15 @@ class ShoppingUI:
             lists=lists,
             active_id=list_id,
             label_order=data.label_order,
+            labels=labels,
         )
         # Remembered so that a change in another chat can re-render this one.
         self.chat(chat_id).language = tr.language
         return text, markup, data.name
+
+    async def fetch(self, chat_id: int, list_id: str) -> ListView:
+        """Fetch the list from Mealie; a render right after can use ``cached=True``."""
+        return (await self._view(chat_id, list_id, cached=False))[0]
 
     async def _view(
         self,
@@ -228,11 +247,15 @@ class ShoppingUI:
 
     async def refresh(self, message: Message, tr: Translator, cached: bool = False) -> None:
         """Re-render a list message in place with its own display state."""
-        chat = self.chat(message.chat.id)
-        state = chat.state_for(message.message_id)
-        text, markup, _ = await self.render(message.chat.id, state, tr, cached=cached)
+        await self.refresh_id(message.bot, message.chat.id, message.message_id, tr, cached)
+
+    async def refresh_id(
+        self, bot: Bot | None, chat_id: int, message_id: int, tr: Translator, cached: bool = False
+    ) -> None:
+        state = self.chat(chat_id).state_for(message_id)
+        text, markup, _ = await self.render(chat_id, state, tr, cached=cached)
         with suppress(*_TELEGRAM_ERRORS):
-            await _edit(message.bot, message.chat.id, message.message_id, text, markup)
+            await _edit(bot, chat_id, message_id, text, markup)
 
     async def sync_others(self, bot: Bot | None, origin_chat_id: int) -> None:
         """After a change in one chat, re-render the live messages of the other chats
@@ -270,7 +293,7 @@ class ShoppingUI:
             *chat.questions,
             *self.transient.take(message.chat.id),
         ]
-        chat.transient_message_ids, chat.questions = [], {}
+        chat.transient_message_ids, chat.questions, chat.name_prompts = [], {}, {}
         if message.bot is None:  # pragma: no cover - messages from the dispatcher carry a bot
             return
         for message_id in ids:
@@ -389,7 +412,11 @@ def _owner_id(message: Message) -> int | None:
 
 
 def build_router(context: FeatureContext) -> Router:
-    service = ShoppingService(context.mealie, default_list=context.settings.shopping_list)
+    service = ShoppingService(
+        context.mealie,
+        default_list=context.settings.shopping_list,
+        create_foods=context.settings.shopping_create_foods,
+    )
     ui = ShoppingUI(
         service,
         delete_commands=context.settings.delete_commands,
@@ -516,8 +543,11 @@ def build_router(context: FeatureContext) -> Router:
 
     @router.message(F.text & ~F.text.startswith("/"))
     async def add_items(message: Message, tr: Translator) -> None:
-        async with ui.locked(message.chat.id):
-            if has_arrow(message.text or ""):
+        async with ui.locked(message.chat.id) as chat:
+            reply = message.reply_to_message
+            if reply is not None and reply.message_id in chat.name_prompts:
+                await name_category_locked(message, reply.message_id, tr)
+            elif has_arrow(message.text or ""):
                 await assign_locked(message, tr)
             else:
                 await add_items_locked(message, tr)
@@ -823,6 +853,247 @@ def build_router(context: FeatureContext) -> Router:
             return
         await ui.sync_others(message.bot, message.chat.id)
 
+    # --- sort picker ("🏷️ Sort (n)" under "Other") -------------------------
+
+    async def sort_item(
+        chat_id: int,
+        state: ListState,
+        item: JSON,
+        label: JSON,
+        actor: Message | CallbackQuery,
+        tr: Translator,
+        *,
+        chosen: JSON | None = None,
+        create: bool = False,
+    ) -> str | None:
+        """Put the picker's current item into ``label`` like an arrow line would
+        and move on; returns the product name for the toast.
+
+        A note item whose name only resembles an existing product is not sorted
+        yet: the picker asks first (``state.sort_question``) and None is
+        returned. The answer comes back as ``chosen`` (that product) or
+        ``create`` (a new product under the typed name).
+        """
+        list_id = await ui.list_id(chat_id, state)
+        food_id = item.get("foodId") or (item.get("food") or {}).get("id")
+        food = await service.food_by_id(str(food_id)) if food_id else chosen
+        if food is not None:
+            name = str(food.get("name")) if food_id else item_parts(item, tr.language)[0]
+        elif food_id:
+            # The food is gone from Mealie: sort under its old name, without the note.
+            name = str((item.get("food") or {}).get("name") or item_parts(item, tr.language)[0])
+        else:
+            name = item_parts(item, tr.language)[0]
+            if not create and await service.find_food(name) is None:
+                similar = (await service.foods()).similar(name)
+                if similar is not None:
+                    state.sort_question = SortQuestion(
+                        str(item["id"]),
+                        str(label["id"]),
+                        str(similar["id"]),
+                        str(similar.get("name") or "?"),
+                    )
+                    return None
+        state.sort_question = None
+        result = await service.assign(list_id, [name], label, {name: food} if food else {})
+        if state.sort_result is not None:
+            state.sort_result.extend(result)
+        if state.sort_queue:
+            state.sort_queue.pop(0)
+        ui.record(
+            chat_id,
+            "sorted",
+            actor,
+            [f"{n} → {label_dict_text(lab, tr, ui.label_icons)}" for n, lab in result.assigned],
+        )
+        return result.assigned[0][0] if result.assigned else name
+
+    @router.callback_query(SortAction.filter())
+    async def on_sort(query: CallbackQuery, callback_data: SortAction, tr: Translator) -> None:
+        message = query.message
+        if not isinstance(message, Message) or (
+            callback_data.arg and not valid_id(callback_data.arg)
+        ):
+            await query.answer()
+            return
+        async with ui.locked(message.chat.id) as chat:
+            state = chat.state_for(message.message_id)
+            try:
+                await on_sort_locked(query, message, state, callback_data, tr)
+            except (MealieError, NoShoppingListError) as exc:
+                await toast_error(query, tr, exc)
+
+    async def on_sort_locked(
+        query: CallbackQuery,
+        message: Message,
+        state: ListState,
+        callback_data: SortAction,
+        tr: Translator,
+    ) -> None:
+        chat_id = message.chat.id
+        action = callback_data.action
+        if action == "start":
+            items = (await ui.fetch(chat_id, await ui.list_id(chat_id, state))).items
+            state.start_sort(items)
+            await query.answer(None if state.sort_queue else tr("sort.nothing"))
+            await ui.refresh(message, tr, cached=True)
+            return
+        if state.view != VIEW_SORT:
+            # Closed already, or opened before a restart.
+            await query.answer(tr("sort.stale"))
+            await ui.refresh(message, tr)
+            return
+        if action == "new":
+            await query.answer()
+            await ask_category_name(message, query, tr)
+            return
+        if action == "pick":
+            items = (await ui.fetch(chat_id, await ui.list_id(chat_id, state))).items
+            item = state.sort_current(items)
+            label = await service.label_by_id(callback_data.arg)
+            if item is None:
+                await query.answer(tr("sort.nothing"))
+            elif label is None:
+                await query.answer(tr("sort.label_gone"))
+            else:
+                name = await sort_item(chat_id, state, item, label, query, tr)
+                await answer_sorted(query, name, label, tr)
+            await ui.refresh(message, tr)
+            await ui.sync_others(message.bot, chat_id)
+            return
+        if action in {"food_use", "food_new"}:
+            await on_food_answer(query, message, state, callback_data, tr)
+            return
+        await query.answer()
+        if action == "food_back":
+            state.sort_question = None
+        elif action == "skip":
+            items = (await ui.fetch(chat_id, await ui.list_id(chat_id, state))).items
+            state.sort_question = None
+            if state.sort_current(items) is not None:
+                state.sort_queue.pop(0)
+        else:  # "back"
+            state.finish_sort()
+            await drop_name_prompts(message)
+        await ui.refresh(message, tr, cached=True)
+
+    async def answer_sorted(
+        query: CallbackQuery, name: str | None, label: JSON, tr: Translator
+    ) -> None:
+        if name is None:  # asked "did you mean" first
+            await query.answer()
+            return
+        shown = label_dict_text(label, tr, ui.label_icons)
+        await query.answer(toast_text(tr("sort.toast_sorted", item=name, label=shown)))
+
+    async def on_food_answer(
+        query: CallbackQuery,
+        message: Message,
+        state: ListState,
+        callback_data: SortAction,
+        tr: Translator,
+    ) -> None:
+        """Answer to the picker's "did you mean" question."""
+        chat_id = message.chat.id
+        question = state.sort_question
+        items = (await ui.fetch(chat_id, await ui.list_id(chat_id, state))).items
+        item = state.sort_current(items)
+        if question is None or item is None or str(item["id"]) != question.item_id:
+            state.sort_question = None
+            await query.answer(tr("sort.stale"))
+            await ui.refresh(message, tr)
+            return
+        label = await service.label_by_id(question.label_id)
+        chosen = None
+        if callback_data.action == "food_use":
+            chosen = await service.food_by_id(callback_data.arg)
+        if label is None or (callback_data.action == "food_use" and chosen is None):
+            state.sort_question = None
+            await query.answer(tr("sort.label_gone" if label is None else "sort.food_gone"))
+            await ui.refresh(message, tr)
+            return
+        name = await sort_item(
+            chat_id, state, item, label, query, tr, chosen=chosen, create=chosen is None
+        )
+        await answer_sorted(query, name, label, tr)
+        await ui.refresh(message, tr)
+        await ui.sync_others(message.bot, chat_id)
+
+    async def drop_name_prompts(message: Message) -> None:
+        """Delete open "New category" prompts of a picker that was closed."""
+        chat = ui.chat(message.chat.id)
+        for prompt_id, list_message_id in list(chat.name_prompts.items()):
+            if list_message_id != message.message_id:
+                continue
+            del chat.name_prompts[prompt_id]
+            if message.bot is not None:
+                with suppress(*_TELEGRAM_ERRORS):
+                    await message.bot.delete_message(message.chat.id, prompt_id)
+
+    async def ask_category_name(message: Message, query: CallbackQuery, tr: Translator) -> None:
+        """Ask for the new category's name with a reply prompt. In a group the
+        prompt mentions the person who tapped, so only their keyboard opens."""
+        chat = ui.chat(message.chat.id)
+        user = query.from_user
+        if message.chat.type == "private":
+            text = tr("sort.ask_name")
+        else:
+            mention = f'<a href="tg://user?id={user.id}">{escape(user.first_name)}</a>'
+            text = tr("sort.ask_name_user", user=mention)
+        sent = await message.answer(
+            text,
+            reply_markup=ForceReply(
+                force_reply=True,
+                selective=True,
+                input_field_placeholder=tr("sort.name_placeholder"),
+            ),
+        )
+        chat.name_prompts[sent.message_id] = message.message_id
+        chat.transient_message_ids.append(sent.message_id)
+
+    async def name_category_locked(message: Message, prompt_id: int, tr: Translator) -> None:
+        """The reply to a "New category" prompt: create (or find) the category, sort
+        the picker's current item into it and update the picker in place."""
+        chat = ui.chat(message.chat.id)
+        list_message_id = chat.name_prompts[prompt_id]
+        state = chat.states.get(list_message_id)
+        name = " ".join(clean_text(message.text or "").split())
+        if len(name) > MAX_LABEL_LENGTH:
+            await send_transient(message, tr("category.too_long", max=MAX_LABEL_LENGTH))
+            return
+        if not name:
+            return
+        if state is None or state.view != VIEW_SORT:
+            chat.name_prompts.pop(prompt_id, None)
+            await send_transient(message, tr("sort.stale"))
+            return
+        try:
+            label = await service.find_label(name)
+            if label is None:
+                label = await service.create_label(name, ui.label_emoji)
+                ui.record(
+                    message.chat.id, "label", message, [label_dict_text(label, tr, ui.label_icons)]
+                )
+            list_id = await ui.list_id(message.chat.id, state)
+            item = state.sort_current((await ui.fetch(message.chat.id, list_id)).items)
+            if item is not None:
+                await sort_item(message.chat.id, state, item, label, message, tr)
+        except MealieError as exc:
+            await send_error(message, tr, exc)
+            return
+        chat.name_prompts.pop(prompt_id, None)
+        if prompt_id in chat.transient_message_ids:
+            chat.transient_message_ids.remove(prompt_id)
+        if message.bot is not None:
+            with suppress(*_TELEGRAM_ERRORS):
+                await message.bot.delete_message(message.chat.id, prompt_id)
+        await ui.tidy(message, items=True)
+        try:
+            await ui.refresh_id(message.bot, message.chat.id, list_message_id, tr)
+        except (MealieError, NoShoppingListError) as exc:
+            log.warning("Refreshing list failed: %s", exc)
+        await ui.sync_others(message.bot, message.chat.id)
+
     # --- buttons --------------------------------------------------------
 
     @router.callback_query(ItemAction.filter())
@@ -897,8 +1168,7 @@ def build_router(context: FeatureContext) -> Router:
                     # Keep the undo data until Mealie confirmed, so a failed
                     # attempt (Mealie down) can be repeated.
                     if isinstance(state.undo, AddResult):
-                        created_ids = [item["id"] for item in state.undo.created]
-                        count = await service.undo_add(created_ids, state.undo.previous)
+                        count = await service.undo_add(state.undo)
                     else:
                         count = await service.undo_assign(state.undo)
                     ui.record(message.chat.id, "undone", query, [], count)

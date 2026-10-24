@@ -76,7 +76,9 @@ then shows what was added, with an *Undo* button.
 
 A line with an arrow sorts products into a category, for good:
 `Ketchup → Condiments` (also `->`, `=>` or `>`, several products with commas). A new
-category or an unknown product is created after a short question. Category
+category or an unknown product is created after a short question. Under
+*Other*, *🏷️ Sort (n)* goes through the items one by one with a button per
+category. Category
 buttons show the label's colour from Mealie as a circle (`🟣 🧂 Condiments`);
 `LABEL_ICONS` switches circles or emojis off.
 

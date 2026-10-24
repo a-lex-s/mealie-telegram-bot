@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import difflib
+import logging
 import time
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -10,8 +11,10 @@ from dataclasses import dataclass, field
 from mealie_bot.features.shopping.parser import ParsedEntry
 from mealie_bot.i18n import unit_synonyms
 from mealie_bot.i18n.labels import label_color, label_emoji, split_label_name
-from mealie_bot.mealie import MealieClient
+from mealie_bot.mealie import MealieClient, MealieError
 from mealie_bot.mealie.client import JSON
+
+log = logging.getLogger(__name__)
 
 # Fields accepted by PUT /api/households/shopping/items/{id} (ShoppingListItemUpdate).
 _UPDATE_FIELDS = (
@@ -90,12 +93,16 @@ class FoodIndex:
     def __init__(self, foods: list[JSON]) -> None:
         self.foods = foods
         self._by_spelling: dict[str, JSON] = {}
+        self._by_id = {str(food.get("id")): food for food in foods}
         for food in foods:
             for spelling in _spellings(food):
                 self._by_spelling.setdefault(spelling, food)
 
     def find(self, name: str) -> JSON | None:
         return self._by_spelling.get(name.strip().casefold())
+
+    def get(self, food_id: str) -> JSON | None:
+        return self._by_id.get(food_id)
 
     def similar(self, name: str) -> JSON | None:
         """The food whose spelling is closest to ``name`` ("Ketchap" → Ketchup), if close enough."""
@@ -152,11 +159,13 @@ class UnitResolver:
 
 @dataclass(frozen=True)
 class AddResult:
-    """Outcome of one bulk create: new items, merged items and their old versions."""
+    """Outcome of one bulk create: new items, merged items and their old versions,
+    and the foods created for unknown names (``SHOPPING_CREATE_FOODS``)."""
 
     created: list[JSON] = field(default_factory=list)
     updated: list[JSON] = field(default_factory=list)
     previous: list[JSON] = field(default_factory=list)
+    created_food_ids: list[str] = field(default_factory=list)
 
     @property
     def items(self) -> list[JSON]:
@@ -165,8 +174,9 @@ class AddResult:
 
     @property
     def undoable(self) -> bool:
-        """True if undo_add would change anything (created items or known previous versions)."""
-        return bool(self.created or self.previous)
+        """True if undo_add would change anything (created items, foods or known
+        previous versions)."""
+        return bool(self.created or self.previous or self.created_food_ids)
 
 
 @dataclass(frozen=True)
@@ -214,12 +224,15 @@ class ShoppingService:
         self,
         client: MealieClient,
         default_list: str | None = None,
+        create_foods: bool = False,
         unit_cache_seconds: float = 600,
         food_recheck_seconds: float = 60,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._client = client
         self._default_list = default_list
+        # SHOPPING_CREATE_FOODS: unknown names become foods (without a label).
+        self._create_foods = create_foods
         self._selected: dict[int, str] = {}
         self._unit_cache_seconds = unit_cache_seconds
         self._food_recheck_seconds = food_recheck_seconds
@@ -287,6 +300,13 @@ class ShoppingService:
             self._foods_loaded_at = now
         return self._foods
 
+    async def food_by_id(self, food_id: str) -> JSON | None:
+        """The complete food (as GET /api/foods returns it), reloading once on a miss."""
+        food = (await self.foods()).get(food_id)
+        if food is None:
+            food = (await self.foods(reload=True)).get(food_id)
+        return food
+
     async def find_food(self, name: str) -> JSON | None:
         """Exact match among all foods. A miss on a cache older than a minute
         reloads the foods once, so a food just created in Mealie is found."""
@@ -306,6 +326,14 @@ class ShoppingService:
             self._labels = LabelIndex(await self._client.get_labels())
             self._labels_loaded_at = now
         return self._labels
+
+    async def label_by_id(self, label_id: str) -> JSON | None:
+        """A label by id; a miss reloads the labels once (created in another chat)."""
+        for reload in (False, True):
+            for label in (await self.labels(reload=reload)).labels:
+                if str(label["id"]) == label_id:
+                    return label
+        return None
 
     async def find_label(self, name: str) -> JSON | None:
         """Exact match among all labels; a miss on a cache older than a minute reloads once."""
@@ -395,7 +423,12 @@ class ShoppingService:
             ),
         )
 
-    async def build_item(self, list_id: str, entry: ParsedEntry) -> JSON:
+    async def build_item(
+        self, list_id: str, entry: ParsedEntry, created: dict[str, JSON] | None = None
+    ) -> JSON:
+        """The item to create for ``entry``. With ``SHOPPING_CREATE_FOODS`` an unknown
+        name gets a new food without a label; ``created`` collects those foods by
+        case-folded name, so a name that occurs twice is created once."""
         units = await self.units()
         item: JSON = {
             "shoppingListId": list_id,
@@ -407,6 +440,11 @@ class ShoppingService:
         if unit is not None:
             item["unitId"] = unit["id"]
         food = await self.find_food(entry.name)
+        if food is None and self._create_foods and created is not None:
+            key = entry.name.strip().casefold()
+            if key not in created:
+                created[key] = await self._client.create_food(entry.name.strip())
+            food = created[key]
         if food is None:
             # Unknown food: keep everything as free text so nothing is lost.
             item["note"] = (
@@ -428,24 +466,50 @@ class ShoppingService:
         food/unit/note; those come back as ``updated`` together with the
         previous version, so the change can be undone.
         """
-        items = [await self.build_item(list_id, entry) for entry in entries]
-        if not items:
-            return AddResult()
-        before = {item["id"]: item for item in (await self.view(list_id)).items}
-        result = await self._client.create_items(items) or {}
+        foods: dict[str, JSON] = {}
+        try:
+            items = [await self.build_item(list_id, entry, foods) for entry in entries]
+            if not items:
+                return AddResult()
+            before = {item["id"]: item for item in (await self.view(list_id)).items}
+            result = await self._client.create_items(items) or {}
+        except MealieError:
+            # Nothing was added: the foods created for it would only be clutter.
+            await self._delete_foods([str(food["id"]) for food in foods.values()])
+            raise
+        finally:
+            if foods:
+                self._foods = None
         created = list(result.get("createdItems") or [])
         updated = list(result.get("updatedItems") or [])
         previous = [before[item["id"]] for item in updated if item["id"] in before]
-        return AddResult(created=created, updated=updated, previous=previous)
+        return AddResult(
+            created=created,
+            updated=updated,
+            previous=previous,
+            created_food_ids=[str(food["id"]) for food in foods.values()],
+        )
 
-    async def undo_add(self, created_ids: list[str], previous: list[JSON]) -> int:
-        """Revert one ``add_entries`` call: delete the created items and restore the
-        previous versions of merged ones. Returns the number of entries reverted."""
-        await self._client.delete_items(created_ids)
-        for item in previous:
+    async def _delete_foods(self, food_ids: list[str]) -> None:
+        for food_id in food_ids:
+            try:
+                await self._client.delete_food(food_id)
+            except MealieError as exc:
+                log.warning("Could not delete food %s again: %s", food_id, exc)
+
+    async def undo_add(self, result: AddResult) -> int:
+        """Revert one ``add_entries`` call: delete the created items, restore the
+        previous versions of merged ones, then delete the foods it created.
+        Returns the number of entries reverted."""
+        await self._client.delete_items([str(item["id"]) for item in result.created])
+        for item in result.previous:
             payload = {key: item[key] for key in _UPDATE_FIELDS if key in item}
             await self._client.update_item(item["id"], payload)
-        return len(created_ids) + len(previous)
+        # The items are back as they were; a food that cannot be deleted is only logged.
+        await self._delete_foods(result.created_food_ids)
+        if result.created_food_ids:
+            self._foods = None
+        return len(result.created) + len(result.previous)
 
     async def set_checked(self, item_id: str, checked: bool) -> JSON:
         """Tick an item off (or put it back) and return the item as it was before."""

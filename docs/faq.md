@@ -49,17 +49,22 @@ The one picked with `/lists`, otherwise `SHOPPING_LIST`, otherwise the first
 list by name. The choice made with `/lists` resets when the bot restarts.
 
 **Does the bot create foods, units or lists in Mealie?**
-When adding items: no. Unknown foods are stored as a note on the item; an
-unknown unit goes into the note while the food (and its category) is still
-matched; lists must exist in Mealie. A food created in Mealie is picked up
-within a minute. Sorting a product into a category (`Ketchup → Condiments`)
-does create the food, and `/category` or the question after an unknown
-category creates a label. The bot never creates units or lists.
+When adding items: only with `SHOPPING_CREATE_FOODS=true`, which creates a food
+without a category for each unknown name (*Undo* deletes it again). By default
+unknown foods are stored as a note on the item; an unknown unit goes into the
+note while the food (and its category) is still matched; lists must exist in
+Mealie. A food created in Mealie is picked up within a minute. Sorting a
+product into a category (`Ketchup → Condiments` or the *Sort* button) does
+create the food, and `/category`, the question after an unknown category or
+*New category…* in the picker creates a label. The bot never creates units or
+lists.
 
 **Everything lands in "Other". How do I get categories?**
 Categories are Mealie labels on foods. Send `Ketchup → Condiments` (or `->`,
 `>`; several products with commas) and the product keeps that category for
-good. `/categories` shows what exists and how many products have no category.
+good. To sort many at once, open *Other* and tap *🏷️ Sort (n)*: the list
+message asks about one item after the other, one tap each. `/categories`
+shows what exists and how many products have no category.
 
 **My own categories show only a coloured circle or 📦.**
 The emoji comes from a built-in keyword table (German and English), from

@@ -52,6 +52,7 @@ bot at start-up with exit code 2 and a message that never contains secret values
 | `MEALIE_URL` | no | `http://mealie:9000` | Base URL of Mealie, as seen from the bot container |
 | `BOT_LANGUAGE` | no | per user | Force one language (`en`, `de`) for everybody |
 | `SHOPPING_LIST` | no | first list | Default shopping list, by name (case-insensitive) or ID |
+| `SHOPPING_CREATE_FOODS` | no | `false` | Create a Mealie food (without a category) for an item name Mealie does not know, instead of storing the name as a note (6.3) |
 | `FEATURE_SHOPPING` | no | `true` | Enable the shopping list feature |
 | `DELETE_COMMANDS` | no | `true` | Delete the user's `/list`, `/lists`, `/clear`, `/category`, `/categories` and `/version` messages once handled, so only the list stays in the chat |
 | `DELETE_ITEM_MESSAGES` | no | `true` | Delete the user's item messages once the items were added; the history entry records them |
@@ -144,7 +145,9 @@ in Mealie there is nothing to choose; the bot just names it
 
 ### 6.3 Adding items
 
-Any text message that is not a command adds items to the active list.
+Any text message that is not a command adds items to the active list, except
+a line with an arrow (sorting, 6.8) and a reply to the sort picker's name
+prompt (6.8).
 
 * Entries are separated by line breaks, semicolons or commas. A comma between
   two digits is a decimal separator (`1,5 l Milch` is one entry).
@@ -184,9 +187,13 @@ Matching against Mealie (per entry):
    item's `note` and the food is still matched (`2 Netz Tomaten` → food
    *Tomaten*, note `Netz`, quantity 2). Without a food match the whole text
    becomes the note (`Netz Tomaten`), so nothing typed is lost.
-4. Without a food match the text becomes the item's `note`. Adding items never
-   creates foods or units in Mealie; sorting a product into a category (6.8)
-   does create the food.
+4. Without a food match the text becomes the item's `note`. With
+   `SHOPPING_CREATE_FOODS=true` the bot instead creates a food with that name
+   and no label (`POST /api/foods`, once per name and message) and the item
+   references it, so it shows up under "Other" ready for sorting (6.8); an
+   unknown unit still goes into the note. If the bulk request then fails, the
+   foods created for it are deleted again. Adding items never creates units;
+   sorting a product into a category (6.8) always creates a missing food.
 
 All entries of one message are created in a single bulk request. Mealie itself
 merges a new item into an existing unchecked item with the same food/unit/note
@@ -201,7 +208,10 @@ directly below the user's message with:
 * the categories of the added items expanded;
 * an **Undo** button in place of *Refresh*. Undo deletes the created items and
   restores the previous version of merged items (quantity before the merge),
-  then the button turns back into *Refresh*. Undo data belongs to that list
+  then the button turns back into *Refresh*. Undo also deletes foods the
+  message created (`SHOPPING_CREATE_FOODS`), after the items, even if another
+  item started using such a food in the meantime; a food Mealie refuses to
+  delete is logged and skipped. Undo data belongs to that list
   message and is dropped when the message is replaced or the bot restarts. If
   Mealie cannot be reached when Undo is tapped, the data is kept and the tap
   can be repeated.
@@ -244,7 +254,8 @@ is shown; taps and changes from the other chat edit it in place.
   without a position come after them alphabetically, unlabelled items are last
   as "Other". All categories start collapsed; tapping a header toggles it for that
   message. A list with a single category shows its items directly without a
-  header.
+  header. Below the items of an open "Other" sits a green **🏷️ Sort (n)**
+  button that opens the sort picker (6.8).
 * Header buttons are coloured blue (Bot API button `style` `primary`), item
   buttons and **Undo** / **Refresh** keep the default colour, **Done (m)** is
   green (`success`) and reads just **Done** without colour while nothing is
@@ -293,8 +304,8 @@ is shown; taps and changes from the other chat edit it in place.
   The other chats are rendered from the list the changing chat fetched right
   after the change, so a change costs one list request however many chats
   show the list; if that fetch failed, each chat fetches on its own.
-* Item buttons and category headers share a budget of 80 buttons (Telegram
-  allows 100 per message); items beyond it are counted in the text. Quotes
+* Item buttons, category headers and the Sort button share a budget of 80
+  buttons (Telegram allows 100 per message); items beyond it are counted in the text. Quotes
   (*Added*, *Done*, the removal question) list at most 20 items and count the
   rest, so the message stays below Telegram's 4096 characters.
 * If an item no longer exists when tapped, the bot says so in a toast and refreshes.
@@ -407,6 +418,40 @@ list is shown again with the sorted products' categories expanded and a
 records `🏷️ Ketchup → 🟣 🧂 Würzmittel`. **Undo** restores the items, puts
 the foods' previous labels back and deletes the foods the sorting created; a
 category created on the way stays (it is harmless in Mealie).
+
+**Sorting with buttons.** **🏷️ Sort (n)** under an open "Other" turns the
+list message into a picker, like the list chooser (6.2): no new message in the
+chat. It goes through the open items without a label in list order, one at a
+time: `🏷️ <b>Sort</b> · 1 of 3`, `<b>Ketchup</b> · <i>Which category?</i>`,
+one blue button per label two to a row, then **➕ New category…** (green),
+**⏭ Skip** and **✕ Back to the list**. At most 77 labels are shown, so the
+keyboard stays within the 80-button budget; the text names how many more
+exist and points to the arrow syntax.
+
+* Label order is a suggestion only: labels whose emoji the keyword table also
+  finds in the product name come first (`Milch` → 🥛 → *Milchprodukte*), then
+  the list's own category order (6.4), then the rest by name.
+* A label tap sorts the item exactly like `item → label` (step 3 above, on the
+  item's food or, for a note, on a food with that name, created if missing),
+  answers with a toast (`✅ Ketchup → 🟣 🧂 Würzmittel`), records the history
+  line and shows the next item. Other chats on the list are synced (6.4).
+  For a note whose name only resembles an existing food (`Ketschup`), the
+  picker asks first, in place, as step 3 does: **Yes, Ketchup** (green) /
+  **➕ No, create Ketschup** / **↩️ Other category** (back to the label
+  buttons). Items that were ticked off, deleted or sorted elsewhere in the meantime are
+  skipped.
+* **➕ New category…** sends one prompt that asks for the name as a reply
+  (Telegram `ForceReply`, `selective`; in a group it mentions the person who
+  tapped, so only their keyboard opens). The reply is not an item message: the
+  bot finds or creates the label (like `/category`), sorts the current item
+  into it, deletes the prompt and the reply (`DELETE_ITEM_MESSAGES`) and edits
+  the picker in place. A name longer than 40 characters is answered and the
+  prompt stays open.
+* After the last item, or on **Back to the list**, the message shows the list
+  again with the sorted categories expanded, a **Sorted** quote and **Undo**
+  for everything sorted in this round (as for the arrow syntax). Back also
+  deletes an open name prompt. A tap on a picker that is closed or from before
+  a restart is answered with a toast and the list is shown.
 
 **Commands.** `/category Name` creates a label (with its emoji in the name if
 typed, `/category 🧴 Drogerie`; invisible characters are dropped); if it

@@ -84,6 +84,9 @@ class ChatState:
     # Questions asked for "items → category" messages, by the question's message id.
     # Deleted together with the transient messages when the list is shown again.
     questions: dict[int, PendingAssignment] = field(default_factory=dict)
+    # "New category" prompts of the sort picker: prompt message id -> list message id.
+    # The prompts are transient messages too and go with them.
+    name_prompts: dict[int, int] = field(default_factory=dict)
     # Handlers for one chat run one after another (two taps, two texts at once).
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 

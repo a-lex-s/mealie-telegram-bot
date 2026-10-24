@@ -28,6 +28,7 @@ services:
       # Optional:
       # BOT_LANGUAGE: de           # force one language for everybody
       # SHOPPING_LIST: Groceries   # default list (name or ID); otherwise the first list
+      # SHOPPING_CREATE_FOODS: "false"  # "true" creates a Mealie food for unknown item names
       # FEATURE_SHOPPING: "true"
       # DELETE_COMMANDS: "true"   # delete /list etc. after handling; "false" keeps them
       # DELETE_ITEM_MESSAGES: "true"  # delete your item messages once added; "false" keeps them

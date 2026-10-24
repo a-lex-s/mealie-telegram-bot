@@ -50,6 +50,8 @@ MESSAGES: dict[str, str] = {
         "<code>Mustard, Mayo → Condiments</code>). "
         "A new category is created after you confirm; a product Mealie does not know yet "
         "is created too.\n"
+        "Under <i>Other</i>, <b>🏷️ Sort</b> goes through the items one by one, "
+        "one tap per product.\n"
         "/{category} creates a category, /{categories} shows them all.\n\n"
         "<blockquote expandable>💡 <b>How the list behaves</b>\n"
         "There is always one list message, at the bottom of the chat. "
@@ -102,6 +104,31 @@ MESSAGES: dict[str, str] = {
     "assign.btn_food_use": "Yes, {food}",
     "assign.btn_food_new": "➕ No, create {name}",
     "assign.stale": "⚠️ That question is no longer open. Please send the line again.",
+    # Sort picker (button under "Other")
+    "sort.btn_start": "🏷️ Sort ({count})",
+    "sort.header": "🏷️ <b>Sort</b> · {index} of {total}",
+    "sort.question": "<b>{item}</b> · <i>Which category?</i>",
+    "sort.no_labels": "<i>There are no categories yet. Create the first one.</i>",
+    "sort.more_labels": (
+        "<i>… and {count} more categories: send <code>product → category</code> for those.</i>"
+    ),
+    "sort.more_labels.one": (
+        "<i>… and 1 more category: send <code>product → category</code> for it.</i>"
+    ),
+    "sort.btn_food_back": "↩️ Other category",
+    "sort.food_gone": "⚠️ That product no longer exists",
+    "sort.btn_new": "➕ New category…",
+    "sort.btn_skip": "⏭ Skip",
+    "sort.btn_back": "✕ Back to the list",
+    "sort.toast_sorted": "✅ {item} → {label}",
+    "sort.nothing": "Nothing left to sort",
+    "sort.stale": "⚠️ Sorting is no longer open",
+    "sort.label_gone": "⚠️ That category no longer exists",
+    "sort.ask_name": "✏️ What should the new category be called? Reply with its name.",
+    "sort.ask_name_user": (
+        "✏️ {user}, what should the new category be called? Reply with its name."
+    ),
+    "sort.name_placeholder": "Category name",
     "error.unknown_command": "I do not know that command. /help lists what I can do.",
     # List message
     "shopping.list_header": "🛒 <b>{list}</b>",

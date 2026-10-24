@@ -34,6 +34,8 @@ Icons = LabelIcons | Mapping[str, str] | None
 # Telegram allows 100 buttons per keyboard; item buttons and category headers share
 # this budget, the rest is room for the control row.
 MAX_ITEM_BUTTONS = 80
+# The sort picker shows this many category buttons besides New, Skip and Back.
+MAX_SORT_LABELS = MAX_ITEM_BUTTONS - 3
 # Telegram ellipsises long button texts itself; cut earlier so our "…" lands after the name.
 MAX_BUTTON_TEXT = 40
 # Telegram messages hold 4096 characters; quotes list at most this many items.
@@ -48,6 +50,7 @@ VIEW_OPEN = "open"
 VIEW_DONE = "done"
 VIEW_CLEAR = "clear"  # confirmation before deleting ticked-off items
 VIEW_LISTS = "lists"  # choose the active list
+VIEW_SORT = "sort"  # sort the items under "Other" into categories, one at a time
 
 # Key used for items without a label, both in ``ListState.expanded`` and callback data.
 NO_LABEL = "-"
@@ -77,12 +80,30 @@ class SelectList(CallbackData, prefix="sel"):
     list_id: str
 
 
+class SortAction(CallbackData, prefix="so"):
+    """A tap in the sort picker (or on the button that opens it)."""
+
+    # "start" | "pick" | "new" | "skip" | "back" | "food_use" | "food_new" | "food_back"
+    action: str
+    arg: str = ""  # label id for "pick", food id for "food_use"
+
+
 class AssignAnswer(CallbackData, prefix="as"):
     """Answer to a question asked while sorting products into a category."""
 
     # "label_new" | "label_use" | "food_new" | "food_use" | "cancel"
     action: str
     arg: str = ""  # label id or food id for "*_use"
+
+
+@dataclass
+class SortQuestion:
+    """The sort picker asks whether a note item means a similar existing product."""
+
+    item_id: str
+    label_id: str  # the category that was tapped
+    food_id: str
+    food_name: str
 
 
 @dataclass
@@ -100,12 +121,51 @@ class ListState:
     notice: str = ""
     # What the last change on this message did, as long as it can be undone.
     undo: AddResult | AssignResult | None = None
+    # The sort picker (VIEW_SORT): item ids still to sort, how many there were,
+    # and what was sorted so far (it becomes ``undo`` when the picker closes).
+    sort_queue: list[str] = field(default_factory=list)
+    sort_total: int = 0
+    sort_result: AssignResult | None = None
+    # Open "did you mean" question for the current item, if any.
+    sort_question: SortQuestion | None = None
 
     def toggle(self, label_key: str) -> None:
         if label_key in self.expanded:
             self.expanded.discard(label_key)
         else:
             self.expanded.add(label_key)
+
+    def start_sort(self, items: list[JSON]) -> None:
+        self.view = VIEW_SORT
+        self.sort_queue = [str(item["id"]) for item in uncategorised(items)]
+        self.sort_total = len(self.sort_queue)
+        self.sort_result = AssignResult()
+        self.sort_question = None
+
+    def sort_current(self, items: list[JSON]) -> JSON | None:
+        """The item the picker asks about. Items that were ticked off, deleted or
+        sorted elsewhere in the meantime are dropped from the queue."""
+        waiting = {str(item["id"]): item for item in uncategorised(items)}
+        while self.sort_queue and self.sort_queue[0] not in waiting:
+            self.sort_queue.pop(0)
+        return waiting[self.sort_queue[0]] if self.sort_queue else None
+
+    @property
+    def sort_index(self) -> int:
+        """1-based position of the current item among all items the picker started with."""
+        return self.sort_total - len(self.sort_queue) + 1
+
+    def finish_sort(self) -> None:
+        """Close the picker; what was sorted is shown like an arrow sorting, with Undo."""
+        result = self.sort_result
+        self.view = VIEW_OPEN
+        self.sort_queue, self.sort_total, self.sort_result = [], 0, None
+        self.sort_question = None
+        if result is not None and result.assigned:
+            self.added = []
+            self.sorted_into = list(result.assigned)
+            self.undo = result if result.undoable else None
+            self.expanded |= {str(label["id"]) for _, label in result.assigned}
 
 
 # --- item texts -----------------------------------------------------------
@@ -179,6 +239,12 @@ def item_html(item: JSON, language: str, suffix: str = "") -> str:
 def label_key(item: JSON) -> str:
     label = item.get("label") or {}
     return str(label.get("id") or item.get("labelId") or NO_LABEL)
+
+
+def uncategorised(items: list[JSON]) -> list[JSON]:
+    """Open items under "Other", in list order: what the sort picker goes through."""
+    waiting = [i for i in items if not i.get("checked") and label_key(i) == NO_LABEL]
+    return sorted(waiting, key=lambda i: i.get("position") or 0)
 
 
 def label_name(item: JSON, tr: Translator) -> str:
@@ -289,12 +355,14 @@ def render_list(
     lists: list[JSON] | None = None,
     active_id: str = "",
     label_order: Mapping[str, int] | None = None,
+    labels: list[JSON] | None = None,
 ) -> tuple[str, InlineKeyboardMarkup]:
     """Render the list message; ``emoji`` says how categories are shown (``LabelIcons``,
     or just the ``LABEL_EMOJI`` overrides),
     ``label_order`` the category positions from Mealie's list settings.
 
-    ``lists`` and ``active_id`` are only needed for the list chooser view.
+    ``lists`` and ``active_id`` are only needed for the list chooser view,
+    ``labels`` (all Mealie labels) only for the sort picker.
     """
     language = tr.language
     checked = [i for i in items if i.get("checked")]
@@ -303,6 +371,10 @@ def render_list(
 
     if state.view == VIEW_LISTS:
         return list_chooser(lists or [], active_id, tr)
+    if state.view == VIEW_SORT:
+        current = state.sort_current(items)
+        if current is not None:
+            return render_sort(name, current, state, tr, labels or [], emoji, label_order)
     if state.view == VIEW_CLEAR:
         return _render_clear_question(name, checked, tr)
     if state.view == VIEW_DONE:
@@ -355,8 +427,9 @@ def render_list(
 
     rows: list[list[InlineKeyboardButton]] = []
     groups = _group(unchecked, tr, label_order)
-    # Category headers come out of the same budget as the item buttons.
-    budget = MAX_ITEM_BUTTONS - (len(groups) if len(groups) > 1 else 0)
+    # Category headers and the Sort button come out of the same budget as the items.
+    has_other = any(key == NO_LABEL for key, _, _ in groups)
+    budget = MAX_ITEM_BUTTONS - (len(groups) if len(groups) > 1 else 0) - has_other
     shown = 0
     hidden = 0
     for key, label, group in groups:
@@ -382,6 +455,16 @@ def render_list(
         hidden += len(rest)
         shown += len(visible)
         rows.extend(_pack_rows(visible, "check", VIEW_OPEN, language))
+        if key == NO_LABEL:
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=tr("sort.btn_start", count=len(group)),
+                        callback_data=SortAction(action="start").pack(),
+                        style=STYLE_DONE,
+                    )
+                ]
+            )
     if hidden:
         lines.append(tr("shopping.more", count=hidden))
 
@@ -412,6 +495,115 @@ def render_list(
             )
         )
     rows.append(controls)
+    return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def suggest_labels(
+    item_name: str,
+    labels: list[JSON],
+    emoji: Icons = None,
+    label_order: Mapping[str, int] | None = None,
+) -> list[JSON]:
+    """Labels in the order the sort picker offers them for ``item_name``.
+
+    A label whose emoji the keyword table also finds in the product name comes
+    first ("Milch" → 🥛 → "Milchprodukte"), then the list's own category order,
+    then the rest by name. A suggestion only; the user always picks.
+    """
+    overrides = emoji.overrides if isinstance(emoji, LabelIcons) else (emoji or {})
+    hint = find_label_emoji(item_name)
+    order = label_order or {}
+
+    def key(label: JSON) -> tuple[bool, bool, int, str]:
+        name = str(label.get("name") or "")
+        matches = hint is not None and find_label_emoji(name, overrides) == hint
+        label_id = str(label.get("id"))
+        return (
+            not matches,
+            label_id not in order,
+            order.get(label_id, 0),
+            split_label_name(name)[1].casefold(),
+        )
+
+    return sorted(labels, key=key)
+
+
+def render_sort(
+    name: str,
+    item: JSON,
+    state: ListState,
+    tr: Translator,
+    labels: list[JSON],
+    emoji: Icons = None,
+    label_order: Mapping[str, int] | None = None,
+) -> tuple[str, InlineKeyboardMarkup]:
+    """The sort picker inside the list message: one item, one button per category."""
+    item_name = item_parts(item, tr.language)[0]
+    lines = [
+        tr("shopping.list_header", list=name),
+        tr("sort.header", index=state.sort_index, total=state.sort_total),
+        tr("sort.question", item=escape(item_display(item, tr.language))),
+    ]
+    question = state.sort_question
+    if question is not None and question.item_id == str(item.get("id")):
+        lines[-1] = tr("assign.ask_food", name=escape(item_name), food=escape(question.food_name))
+        return "\n".join(lines), InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=_truncate(tr("assign.btn_food_use", food=question.food_name)),
+                        callback_data=SortAction(action="food_use", arg=question.food_id).pack(),
+                        style=STYLE_DONE,
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text=_truncate(tr("assign.btn_food_new", name=item_name)),
+                        callback_data=SortAction(action="food_new").pack(),
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text=tr("sort.btn_food_back"),
+                        callback_data=SortAction(action="food_back").pack(),
+                    )
+                ],
+            ]
+        )
+    ordered = suggest_labels(item_name, labels, emoji, label_order)
+    shown = ordered[:MAX_SORT_LABELS]
+    if not labels:
+        lines.append(tr("sort.no_labels"))
+    elif len(ordered) > len(shown):
+        lines.append(tr("sort.more_labels", count=len(ordered) - len(shown)))
+    buttons = [
+        InlineKeyboardButton(
+            text=_truncate(label_dict_text(label, tr, emoji)),
+            callback_data=SortAction(action="pick", arg=str(label["id"])).pack(),
+            style=STYLE_CATEGORY,
+        )
+        for label in shown
+    ]
+    rows = [buttons[i : i + 2] for i in range(0, len(buttons), 2)]
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text=tr("sort.btn_new"),
+                callback_data=SortAction(action="new").pack(),
+                style=STYLE_DONE,
+            )
+        ]
+    )
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text=tr("sort.btn_skip"), callback_data=SortAction(action="skip").pack()
+            ),
+            InlineKeyboardButton(
+                text=tr("sort.btn_back"), callback_data=SortAction(action="back").pack()
+            ),
+        ]
+    )
     return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows)
 
 

@@ -13,6 +13,7 @@ from mealie_bot.features.shopping.service import (
     UnitResolver,
 )
 from mealie_bot.i18n import unit_synonyms
+from mealie_bot.mealie import MealieError
 from tests.conftest import LIST_ID, OTHER_LIST_ID, make_food, make_item, make_unit
 
 UNITS = [
@@ -180,7 +181,7 @@ async def test_undo_add(service, mealie_mock):
     delete = mealie_mock.delete("/api/households/shopping/items").respond(json={})
     put = mealie_mock.put("/api/households/shopping/items/old").respond(json={})
     result = AddResult(created=[make_item("new", "b")], updated=[previous], previous=[previous])
-    assert await service.undo_add([i["id"] for i in result.created], result.previous) == 2
+    assert await service.undo_add(result) == 2
     assert delete.calls.last.request.url.params.get_list("ids") == ["new"]
     body = json.loads(put.calls.last.request.content)
     assert body["quantity"] == 1 and "groupId" not in body
@@ -390,3 +391,91 @@ async def test_label_counts(service, mealie_mock):
     assert counts.foods_per_label == {"lab-1": 2}
     assert counts.foods_without_label == 1
     assert counts.items_without_label == 1  # ticked-off items do not count
+
+
+# --- SHOPPING_CREATE_FOODS ------------------------------------------------
+
+
+@pytest.fixture
+def creating(client, mealie_mock):
+    mealie_mock.get("/api/units").respond(json={"items": UNITS})
+    mealie_mock.get("/api/foods").respond(json={"items": [make_food("f-milk", "Milch", "lab")]})
+    mealie_mock.get(f"/api/households/shopping/lists/{LIST_ID}").respond(
+        json={"id": LIST_ID, "listItems": []}
+    )
+    return ShoppingService(client, create_foods=True)
+
+
+async def test_unknown_names_become_foods_once(creating, mealie_mock):
+    ids = iter(["f-new-1", "f-new-2"])
+    foods = mealie_mock.post("/api/foods").mock(
+        side_effect=lambda request: httpx.Response(
+            201, json={"id": next(ids), **json.loads(request.content)}
+        )
+    )
+    bulk = mealie_mock.post("/api/households/shopping/items/create-bulk").respond(
+        201, json={"createdItems": [make_item("n-1", "x")]}
+    )
+    entries = [
+        ParsedEntry("Ketchup"),
+        ParsedEntry("ketchup", 2),
+        ParsedEntry("Milch"),
+        ParsedEntry("Tomaten", 2, "Netz"),
+    ]
+    result = await creating.add_entries(LIST_ID, entries)
+    assert [json.loads(c.request.content) for c in foods.calls] == [
+        {"name": "Ketchup"},
+        {"name": "Tomaten"},
+    ]
+    body = json.loads(bulk.calls.last.request.content)
+    assert [(i.get("foodId"), i["note"]) for i in body] == [
+        ("f-new-1", ""),
+        ("f-new-1", ""),
+        ("f-milk", ""),
+        ("f-new-2", "Netz"),  # the unknown unit stays in the note
+    ]
+    assert "labelId" not in body[0]  # a created food has no category yet
+    assert result.created_food_ids == ["f-new-1", "f-new-2"] and result.undoable
+
+
+async def test_failed_add_deletes_the_created_foods(creating, mealie_mock):
+    mealie_mock.post("/api/foods").respond(201, json={"id": "f-new", "name": "Ketchup"})
+    mealie_mock.post("/api/households/shopping/items/create-bulk").respond(500)
+    delete = mealie_mock.delete("/api/foods/f-new").respond(json={})
+    with pytest.raises(MealieError):
+        await creating.add_entries(LIST_ID, [ParsedEntry("Ketchup")])
+    assert delete.called
+
+
+async def test_undo_add_deletes_created_foods_after_the_items(creating, mealie_mock):
+    from mealie_bot.features.shopping.service import AddResult
+
+    calls = []
+    mealie_mock.delete("/api/households/shopping/items").mock(
+        side_effect=lambda request: calls.append("items") or httpx.Response(200, json={})
+    )
+    mealie_mock.delete("/api/foods/f-new").mock(
+        side_effect=lambda request: calls.append("food") or httpx.Response(200, json={})
+    )
+    result = AddResult(created=[make_item("n-1", "Ketchup")], created_food_ids=["f-new"])
+    assert await creating.undo_add(result) == 1
+    assert calls == ["items", "food"]
+
+
+async def test_undo_add_keeps_going_when_a_food_cannot_be_deleted(creating, mealie_mock):
+    from mealie_bot.features.shopping.service import AddResult
+
+    mealie_mock.delete("/api/households/shopping/items").respond(json={})
+    mealie_mock.delete("/api/foods/f-1").respond(500)
+    second = mealie_mock.delete("/api/foods/f-2").respond(json={})
+    result = AddResult(created=[make_item("n-1", "Ketchup")], created_food_ids=["f-1", "f-2"])
+    assert await creating.undo_add(result) == 1
+    assert second.called
+
+
+async def test_no_foods_are_created_by_default(client, mealie_mock):
+    mealie_mock.get("/api/units").respond(json={"items": []})
+    mealie_mock.get("/api/foods").respond(json={"items": []})
+    foods = mealie_mock.post("/api/foods").respond(201, json={"id": "f"})
+    item = await ShoppingService(client).build_item(LIST_ID, ParsedEntry("Ketchup"), {})
+    assert item["note"] == "Ketchup" and "foodId" not in item and not foods.called
