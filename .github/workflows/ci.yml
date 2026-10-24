@@ -34,8 +34,10 @@ jobs:
           ruff format --check .
       - name: Mypy
         run: mypy
-      - name: Pytest
-        run: pytest -q
+      - name: Import boundaries
+        run: lint-imports
+      - name: Pytest with coverage
+        run: pytest -q --cov
 
   audit:
     name: Dependency audit

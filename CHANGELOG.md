@@ -26,6 +26,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `LABEL_ICONS` (`both`, `color`, `emoji`, `none`) chooses what is shown in
   front of category names.
 
+### Changed
+
+- CI checks every Mealie API path and request field the bot uses against a
+  trimmed copy of the Mealie 3.29.0 OpenAPI document in `tests/data/`
+  (`scripts/trim_openapi.py` refreshes it); before, the test was skipped
+  unless `MEALIE_OPENAPI` was set.
+- CI measures branch coverage and fails below the threshold in
+  `pyproject.toml`, checks layer boundaries with import-linter and checks that
+  pull request titles follow Conventional Commits.
+
 ## [0.1.0] - 2026-10-23
 
 First release: the shopping list helper.

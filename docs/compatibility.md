@@ -9,5 +9,7 @@
 | Docker image | `linux/amd64` | Based on `python:3.12-slim-trixie`, pinned by digest. |
 | Telegram | Bot API, private chats | Groups receive only commands because of Telegram's privacy mode. |
 
-To check the bot against your own Mealie version, download its OpenAPI document
-and run the path test (see [Development](development.md#running-locally)).
+CI checks every API path and request field the bot uses against a trimmed copy
+of the v3.29.0 OpenAPI document (`tests/data/mealie-openapi-3.29.0.json`). To
+check the bot against your own Mealie version, download its OpenAPI document
+and run the same test against it (see [Development](development.md#running-locally)).

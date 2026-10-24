@@ -41,3 +41,38 @@ asyncio_default_fixture_loop_scope = "function"
 files = ["mealie_bot"]
 strict = true
 warn_unreachable = true
+
+[tool.coverage.run]
+branch = true
+source = ["mealie_bot"]
+
+[tool.coverage.report]
+# Measured coverage rounded down; raise it when the measured value grows.
+fail_under = 95
+show_missing = true
+skip_covered = true
+
+# Layer boundaries, checked by `lint-imports` in CI.
+[tool.importlinter]
+root_packages = ["mealie_bot"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Parser and service do not depend on Telegram"
+type = "forbidden"
+source_modules = [
+  "mealie_bot.features.shopping.parser",
+  "mealie_bot.features.shopping.service",
+]
+forbidden_modules = ["aiogram"]
+
+[[tool.importlinter.contracts]]
+name = "The Mealie client knows nothing about features or Telegram"
+type = "forbidden"
+source_modules = ["mealie_bot.mealie"]
+forbidden_modules = ["mealie_bot.features", "mealie_bot.telegram", "aiogram"]
+
+[[tool.importlinter.contracts]]
+name = "Feature modules do not import each other"
+type = "independence"
+modules = ["mealie_bot.features.*"]

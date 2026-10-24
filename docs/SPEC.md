@@ -444,8 +444,12 @@ all fields of `ShoppingListItemUpdate` (`shoppingListId`, `quantity`, `note`,
 `display`, `checked`, `position`, `foodId`, `labelId`, `unitId`, `extras`,
 `recipeReferences`) with only `checked` changed.
 
-`tests/test_openapi_paths.py` checks every path in the client against an
-OpenAPI file when `MEALIE_OPENAPI` points to one.
+`tests/test_openapi_paths.py` checks every path and method in the client, and
+the fields of the request bodies above, against
+`tests/data/mealie-openapi-3.29.0.json`, a copy of the v3.29.0 document trimmed
+to what the bot uses (`scripts/trim_openapi.py` refreshes it). A call missing
+from that file fails the test. `MEALIE_OPENAPI` points the test at another
+OpenAPI file, for example one exported from a newer instance.
 
 ## 8. Security and privacy
 
@@ -464,10 +468,12 @@ OpenAPI file when `MEALIE_OPENAPI` points to one.
   `requirements.txt` (generated from `pyproject.toml`); the base image is pinned
   by digest; GitHub Actions are pinned by commit SHA.
 * CI (GitHub-hosted `ubuntu-latest` runners only) runs ruff, mypy (strict),
-  pytest, pip-audit on both lock files, zizmor on the workflows, gitleaks on the
+  import-linter (layer contracts in `pyproject.toml`), pytest with branch
+  coverage and a minimum (`fail_under`), pip-audit on both lock files, zizmor on the workflows, gitleaks on the
   full history and a Docker build with a smoke test and a Trivy scan
   (CRITICAL/HIGH, fixed only) on every push to `main`, every pull request and
-  weekly on a schedule. An OpenSSF Scorecard workflow uploads its results to
+  weekly on a schedule. Pull request titles are checked against Conventional
+  Commits, since the squash-merge commit takes the title. An OpenSSF Scorecard workflow uploads its results to
   code scanning.
 * A tag `vX.Y.Z` first checks that the tag matches the version in
   `pyproject.toml` and points to a commit on `main`, runs CI, then builds and

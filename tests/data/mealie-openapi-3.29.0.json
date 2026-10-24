@@ -1,0 +1,125 @@
+{
+  "info": {
+    "title": "Mealie",
+    "version": "v3.29.0"
+  },
+  "paths": {
+    "/api/app/about": {
+      "get": {}
+    },
+    "/api/foods": {
+      "get": {},
+      "post": {
+        "requestBody": {
+          "$ref": "#/components/schemas/CreateIngredientFood"
+        }
+      }
+    },
+    "/api/foods/{item_id}": {
+      "delete": {},
+      "put": {
+        "requestBody": {
+          "$ref": "#/components/schemas/CreateIngredientFood"
+        }
+      }
+    },
+    "/api/groups/labels": {
+      "get": {},
+      "post": {
+        "requestBody": {
+          "$ref": "#/components/schemas/MultiPurposeLabelCreate"
+        }
+      }
+    },
+    "/api/households/shopping/items": {
+      "delete": {}
+    },
+    "/api/households/shopping/items/create-bulk": {
+      "post": {
+        "requestBody": {
+          "$ref": "#/components/schemas/ShoppingListItemCreate"
+        }
+      }
+    },
+    "/api/households/shopping/items/{item_id}": {
+      "get": {},
+      "put": {
+        "requestBody": {
+          "$ref": "#/components/schemas/ShoppingListItemUpdate"
+        }
+      }
+    },
+    "/api/households/shopping/lists": {
+      "get": {}
+    },
+    "/api/households/shopping/lists/{item_id}": {
+      "get": {}
+    },
+    "/api/units": {
+      "get": {}
+    },
+    "/api/users/self": {
+      "get": {}
+    }
+  },
+  "components": {
+    "schemas": {
+      "CreateIngredientFood": {
+        "properties": [
+          "aliases",
+          "description",
+          "extras",
+          "householdsWithIngredientFood",
+          "id",
+          "labelId",
+          "name",
+          "pluralName",
+          "substitutions"
+        ]
+      },
+      "MultiPurposeLabelCreate": {
+        "properties": [
+          "color",
+          "name"
+        ]
+      },
+      "ShoppingListItemCreate": {
+        "properties": [
+          "checked",
+          "display",
+          "extras",
+          "food",
+          "foodId",
+          "id",
+          "labelId",
+          "note",
+          "position",
+          "quantity",
+          "recipeReferences",
+          "referencedRecipe",
+          "shoppingListId",
+          "unit",
+          "unitId"
+        ]
+      },
+      "ShoppingListItemUpdate": {
+        "properties": [
+          "checked",
+          "display",
+          "extras",
+          "food",
+          "foodId",
+          "labelId",
+          "note",
+          "position",
+          "quantity",
+          "recipeReferences",
+          "referencedRecipe",
+          "shoppingListId",
+          "unit",
+          "unitId"
+        ]
+      }
+    }
+  }
+}

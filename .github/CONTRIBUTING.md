@@ -46,18 +46,39 @@ Run the checks that CI runs:
 ```sh
 ruff check . && ruff format --check .
 mypy
-pytest
+lint-imports
+pytest --cov
 pip-audit --disable-pip --require-hashes -r requirements.txt
 pip-audit --disable-pip --require-hashes -r requirements-dev.txt
 zizmor .github/workflows
 ```
 
-To verify the Mealie client against your own instance, download its OpenAPI
+`pytest --cov` fails when branch coverage of `mealie_bot` drops below
+`fail_under` in `pyproject.toml` (the measured value, rounded down; raise it
+when coverage grows). `lint-imports` checks the layer boundaries declared in
+`pyproject.toml`: the shopping parser and service do not import aiogram, the
+Mealie client imports neither features nor Telegram code, and feature modules
+do not import each other.
+
+`tests/test_openapi_paths.py` checks every Mealie path the client calls, and
+the fields the bot sends, against a trimmed copy of the Mealie OpenAPI document
+in `tests/data/`. To check against your own instance instead, download its
 document (`<MEALIE_URL>/openapi.json`) and run:
 
 ```sh
 MEALIE_OPENAPI=path/to/openapi.json pytest tests/test_openapi_paths.py
 ```
+
+After adding or changing a Mealie call, or when moving to a new Mealie version,
+refresh the trimmed copy from the full document and commit it:
+
+```sh
+python scripts/trim_openapi.py path/to/openapi.json
+```
+
+The script fails if the client calls a path the document does not have. For a
+new Mealie version, also update the file name in `tests/test_openapi_paths.py`
+and [docs/compatibility.md](../docs/compatibility.md).
 
 ## Making changes
 
@@ -70,7 +91,8 @@ MEALIE_OPENAPI=path/to/openapi.json pytest tests/test_openapi_paths.py
   Add every new message to both `en.py` and `de.py`; the tests check that the
   catalogs are complete. Command names and unit synonyms belong there too.
 * Before changing a Mealie API call, check the path and payload against the
-  OpenAPI document of the targeted Mealie version (currently 3.29.0).
+  OpenAPI document of the targeted Mealie version (currently 3.29.0) and
+  refresh `tests/data/` as described above.
 * Add a line to the "Unreleased" section of [CHANGELOG.md](../CHANGELOG.md) for
   anything a user would notice.
 * Pin versions. Dependencies are declared in `pyproject.toml` and locked with
@@ -88,16 +110,19 @@ MEALIE_OPENAPI=path/to/openapi.json pytest tests/test_openapi_paths.py
 ## Commits and pull requests
 
 * Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/):
-  `feat:`, `fix:`, `docs:`, `test:`, `ci:`, `build:`, `chore:`, `refactor:`.
+  `feat:`, `fix:`, `docs:`, `test:`, `ci:`, `build:`, `chore:`, `refactor:`,
+  `perf:`, `style:`, `revert:`, with an optional scope such as `feat(shopping):`.
   The squash-merge title becomes the changelog entry, so make it descriptive.
+  The *PR title* check fails for a pull request title that does not follow
+  this format.
 * Pull requests are squash-merged into `main`. No merge commits, no force
   pushes to `main`.
 * No links to AI sessions or other private resources in commits, pull request
   text or files. A `Co-Authored-By` trailer is fine. `.claude/settings.json`
   configures this for Claude Code; check the pull request text before merging
   because the squash commit takes it over.
-* CI must be green: ruff, mypy, pytest, pip-audit, zizmor, gitleaks and the Docker
-  build with its Trivy scan.
+* CI must be green: ruff, mypy, import-linter, pytest with coverage, pip-audit,
+  zizmor, gitleaks, the PR title check and the Docker build with its Trivy scan.
 * Fill in the pull request template; it lists the checks above.
 
 ## Adding a language

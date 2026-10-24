@@ -1,8 +1,9 @@
 # Development
 
-Setting up the environment, running the checks, adding a language or a feature
-module and the pull request rules are described in
-[CONTRIBUTING.md](../.github/CONTRIBUTING.md). This page covers running the bot itself
+Setting up the environment, running the checks (including the coverage
+threshold and the import-linter layer contracts), adding a language or a
+feature module and the pull request rules are described in
+[CONTRIBUTING.md](../.github/CONTRIBUTING.md#development-setup). This page covers running the bot itself
 on your machine and cutting a release.
 
 ## Running locally
@@ -39,8 +40,9 @@ To run the container instead of the venv against a Mealie on `localhost`, use
 the commented variant in [compose.example.yml](../compose.example.yml)
 (`network_mode: host`).
 
-To check the Mealie client against your own instance, download
-`<MEALIE_URL>/openapi.json` and run:
+The Mealie client is checked against a trimmed OpenAPI document in
+`tests/data/` on every test run. To check it against your own instance,
+download `<MEALIE_URL>/openapi.json` and run:
 
 ```sh
 MEALIE_OPENAPI=path/to/openapi.json pytest tests/test_openapi_paths.py

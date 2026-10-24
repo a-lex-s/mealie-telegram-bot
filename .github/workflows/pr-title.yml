@@ -1,0 +1,27 @@
+name: PR title
+
+# The squash-merge commit on main takes the pull request title, so the title
+# must follow Conventional Commits (see .github/CONTRIBUTING.md).
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions: {}
+
+jobs:
+  conventional-commits:
+    name: Conventional Commits
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check the title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|docs|test|ci|build|chore|refactor|perf|style|revert)(\([a-z0-9._/-]+\))?!?: [^ ].*'
+          if printf '%s' "$TITLE" | grep -Eq "$pattern"; then
+            echo "OK: $TITLE"
+          else
+            echo "::error::The title must follow Conventional Commits, e.g. 'fix(shopping): keep the note'. Got: $TITLE"
+            exit 1
+          fi
