@@ -44,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shopping lists, contributions for more are welcome. The README has a short roadmap section that points to the project
   board and the milestones; `.github/CONTRIBUTING.md` describes the workflow from issue
   to release.
+- The README screenshots show the category colour circles and the *Sort*
+  button.
 - A change in one chat no longer fetches the list again for every other chat
   that shows it: the other live messages are rendered from the list the
   changing chat just loaded.

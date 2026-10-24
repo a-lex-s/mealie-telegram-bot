@@ -7,8 +7,8 @@ name.
 | File | What it shows | How to get there |
 |---|---|---|
 | `list-collapsed.png` | The live list: progress bar, collapsed categories with their colour circles, the *Done* quote and the *Refresh* / *Done* buttons | send `/list` |
-| `list-expanded.png` | One category opened, items as buttons, short names sharing a row | tap `🔵 🥛 Dairy` |
-| `add-items.png` | Your message `500 g flour, baking powder, 3 lemons` with the list right below it: the *Added* quote, the added categories opened and the *Undo* button | send that message |
+| `list-expanded.png` | Two categories opened, items as buttons, short names sharing a row, and the *Sort* button under *Other* | tap `🔵 🥛 Dairy` and `📦 Other` |
+| `add-items.png` | The end of your message `500 g flour, baking powder, 3 lemons` with the list right below it: the *Added* quote, the added categories opened and the *Undo* button | send that message |
 
 Optional dark variants are named `<name>-dark.png`.
 
@@ -19,11 +19,17 @@ Create a shopping list **Groceries** in Mealie with English labels and foods
 
 * Labels with colours, so the buttons show their circles: `Dairy` (`#5bc0de`,
   🔵), `Baking` (`#e8b84a`, 🟠), `Fruit & vegetables` (`#5cb85c`, 🟢)
-* Open items: `milk` 2 l, `eggs` 6, `yoghurt` (Dairy); `bread` (no food, so it
+* Units `l`, `g` and `can`, so `500 g flour` is read with its unit (the bot
+  does not create units yet)
+* Foods with a singular name and a plural name (the buttons show the
+  singular): `milk`, `egg`/`eggs`, `yoghurt`, `butter` (Dairy), `tomato`/`tomatoes`,
+  `banana`/`bananas`, `lemon`/`lemons` (Fruit & vegetables), `flour`,
+  `baking powder` (Baking)
+* Open items: `milk` 2 l, `egg` 6, `yoghurt` (Dairy); `bread` (no food, so it
   lands in *Other*)
-* Ticked off: `butter`, `tomatoes` 2 cans, `bananas`
-* Foods without items yet: `flour` (Baking), `baking powder` (Baking), `lemons`
-  (Fruit & vegetables); the third screenshot adds them
+* Ticked off: `butter`, `tomato` 2 cans, `banana`
+* Foods without items yet: `flour`, `baking powder` and `lemon`; the third
+  screenshot adds them
 
 Nothing else: no real products you buy, no other lists in the picture.
 
