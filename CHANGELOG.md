@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.2.0] - 2026-10-24
+
 ### Added
 
 - Categories from the chat: `Ketchup → Condiments` (also `->`, `=>`, `>`;
@@ -41,9 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The docs no longer promise recipe and meal plan modules: the bot focuses on
-  shopping lists, contributions for more are welcome. The README has a short roadmap section that points to the project
-  board and the milestones; `.github/CONTRIBUTING.md` describes the workflow from issue
-  to release.
+  shopping lists, contributions for more are welcome. The README has a short
+  roadmap section that points to the project board and the milestones;
+  `.github/CONTRIBUTING.md` describes the workflow from issue to release.
 - The README screenshots show the category colour circles and the *Sort*
   button.
 - A change in one chat no longer fetches the list again for every other chat
@@ -190,5 +194,6 @@ First release: the shopping list helper.
 - IDs from button data are validated before they are used in a Mealie request
   path.
 
-[Unreleased]: https://github.com/a-lex-s/mealie-telegram-bot/compare/v0.1.0...main
+[Unreleased]: https://github.com/a-lex-s/mealie-telegram-bot/compare/v0.2.0...main
+[0.2.0]: https://github.com/a-lex-s/mealie-telegram-bot/releases/tag/v0.2.0
 [0.1.0]: https://github.com/a-lex-s/mealie-telegram-bot/releases/tag/v0.1.0

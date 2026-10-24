@@ -3,7 +3,7 @@
 import os
 import re
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 # Set by the image build from the VCS_REF build argument (see Dockerfile).
 _COMMIT = re.compile(r"^[0-9a-f]{7,40}$")

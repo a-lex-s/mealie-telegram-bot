@@ -15,7 +15,7 @@
 # that says more than "process alive"; restart: unless-stopped covers crashes.
 services:
   mealie-telegram-bot:
-    image: ghcr.io/a-lex-s/mealie-telegram-bot:v0.1.0  # append @sha256:<digest> to pin
+    image: ghcr.io/a-lex-s/mealie-telegram-bot:v0.2.0  # append @sha256:<digest> to pin
     restart: unless-stopped
     environment:
       MEALIE_URL: http://mealie:9000

@@ -67,6 +67,7 @@ Only final versions are released (`vX.Y.Z`); pre-release tags such as
 `v0.2.0-rc1` fail the version check because PEP 440 spells them differently.
 
 1. Bump `version` in `pyproject.toml` and `__version__` in `mealie_bot/__init__.py`,
+   set the image tag in `compose.example.yml` to the new version,
    move the "Unreleased" entries of [CHANGELOG.md](../CHANGELOG.md) under the
    new version with a dated heading, add the `[X.Y.Z]` link at the bottom and
    point `[Unreleased]` at `compare/vX.Y.Z...main`. Merge that pull request and
