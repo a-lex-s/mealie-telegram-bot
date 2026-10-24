@@ -85,12 +85,12 @@ class RecordingSession(BaseSession):
 
 
 def settings(**overrides):
-    values = dict(
-        telegram_token="123456:placeholder",
-        mealie_url=BASE_URL,
-        mealie_token=TOKEN,
-        allowed_user_ids=frozenset({ALICE, BOB}),
-    )
+    values = {
+        "telegram_token": "123456:placeholder",
+        "mealie_url": BASE_URL,
+        "mealie_token": TOKEN,
+        "allowed_user_ids": frozenset({ALICE, BOB}),
+    }
     values.update(overrides)
     return Settings(**values)
 

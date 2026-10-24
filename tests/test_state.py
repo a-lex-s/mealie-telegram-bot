@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from mealie_bot.features.shopping.render import VIEW_DONE, VIEW_OPEN
 from mealie_bot.features.shopping.state import (
@@ -11,7 +11,7 @@ from mealie_bot.features.shopping.state import (
 )
 from mealie_bot.i18n import Translator
 
-T0 = datetime(2026, 1, 1, 21, 0)
+T0 = datetime(2026, 1, 1, 21, 0, tzinfo=UTC)
 
 
 def event(kind, user="Alice", minutes=0, items=(), count=0, user_id=None):

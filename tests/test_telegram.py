@@ -62,12 +62,12 @@ async def test_i18n_uses_language_code_and_override():
 
 
 def _settings(**overrides):
-    values = dict(
-        telegram_token="t",
-        mealie_url=BASE_URL,
-        mealie_token="m",
-        allowed_user_ids=frozenset({1}),
-    )
+    values = {
+        "telegram_token": "t",
+        "mealie_url": BASE_URL,
+        "mealie_token": "m",
+        "allowed_user_ids": frozenset({1}),
+    }
     values.update(overrides)
     return Settings(**values)
 

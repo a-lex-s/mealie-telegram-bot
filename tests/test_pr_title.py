@@ -31,7 +31,8 @@ def pattern() -> str:
 )
 def test_title_pattern(title: str, ok: bool) -> None:
     # grep -E, exactly as the workflow runs it.
-    result = subprocess.run(
-        ["grep", "-Eq", pattern()], input=title, text=True, check=False, capture_output=True
+    cmd = ["grep", "-Eq", pattern()]  # same grep from PATH that the workflow runs
+    result = subprocess.run(  # noqa: S603 - fixed argv, no shell, test input only
+        cmd, input=title, text=True, check=False, capture_output=True
     )
     assert (result.returncode == 0) is ok

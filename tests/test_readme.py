@@ -84,7 +84,7 @@ MAX_SCREENSHOT_BYTES = 400_000
 @pytest.mark.parametrize("image", sorted((ROOT / "docs/images").glob("*.svg")))
 def test_mockups_are_valid_svg_without_external_references(image: Path) -> None:
     text = image.read_text(encoding="utf-8")
-    doc = minidom.parseString(text)
+    doc = minidom.parseString(text)  # noqa: S318 - parses the repo own SVG fixtures
     assert doc.documentElement.tagName == "svg"
     assert not re.search(r"<image|href=|url\(|<script", text), "mockups must be self-contained"
     assert image.stem in VIEWS, f"{image.name} is not one of the README views"

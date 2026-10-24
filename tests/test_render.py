@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 
@@ -27,7 +27,7 @@ from tests.conftest import make_item
 
 EN = Translator("en")
 DE = Translator("de")
-NOW = datetime(2026, 1, 1, 21, 4)
+NOW = datetime(2026, 1, 1, 21, 4, tzinfo=UTC)
 
 
 def button_texts(markup):
