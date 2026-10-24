@@ -16,17 +16,21 @@ The chat is kept tidy around one *live* list message per chat:
   entry that records what was added. A message that failed stays, so the user
   can fix and resend it, and the error message is deleted the next time the
   list is shown.
+* History entries older than ``HISTORY_FOLD_HOURS`` are folded into one
+  history message per chat, checked when the list is shown and every ten
+  minutes (Telegram lets bots delete messages for 48 hours only).
 * Every handler holds the chat's lock, so two taps or two texts at the same
   time are handled one after another.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager, suppress
-from datetime import datetime
+from datetime import datetime, timedelta
 from html import escape
 
 from aiogram import Bot, F, Router
@@ -87,9 +91,10 @@ from mealie_bot.features.shopping.state import (
     ChatState,
     HistoryEvent,
     PendingAssignment,
+    history_lines,
     render_history,
 )
-from mealie_bot.i18n import Translator, command_names
+from mealie_bot.i18n import DEFAULT_LANGUAGE, Translator, command_names
 from mealie_bot.i18n.labels import LabelIcons
 from mealie_bot.mealie import MealieError, MealieNotFound
 from mealie_bot.mealie.client import JSON
@@ -107,6 +112,9 @@ def valid_id(value: str) -> bool:
     return bool(_SAFE_ID.match(value))
 
 
+# How often old history entries are folded when nobody uses the bot.
+FOLD_INTERVAL_SECONDS = 600.0
+
 # Everything that can go wrong while showing the list and deserves a reply.
 _SHOW_ERRORS = (MealieError, NoShoppingListError, *_TELEGRAM_ERRORS)
 
@@ -123,10 +131,11 @@ class ShoppingUI:
         service: ShoppingService,
         delete_commands: bool,
         delete_item_messages: bool,
-        clock: Clock = _local_now,
+        clock: Clock | None = None,
         label_emoji: Mapping[str, str] | None = None,
         label_icons: str = "both",
         transient: TransientMessages | None = None,
+        history_fold_hours: int = 0,
     ) -> None:
         self.service = service
         # Replies of the core commands (``/version``) that go with the shopping ones.
@@ -136,7 +145,10 @@ class ShoppingUI:
         self.label_emoji = label_emoji
         # Display settings for categories (LABEL_ICONS plus LABEL_EMOJI overrides).
         self.label_icons = LabelIcons.from_mode(label_icons, label_emoji)
-        self.clock = clock
+        # Looked up on each call, so tests can move time on.
+        self.clock: Clock = clock or (lambda: _local_now())
+        # HISTORY_FOLD_HOURS: entries older than this go into one history message.
+        self.fold_after = timedelta(hours=history_fold_hours) if history_fold_hours else None
         self.chats: dict[int, ChatState] = {}
         # Last fetched list per chat with its fetch time, so toggles need no round trip.
         self.cache: dict[int, tuple[ListView, datetime]] = {}
@@ -232,8 +244,10 @@ class ShoppingUI:
         text, markup, list_name = await self.render(message.chat.id, state, tr)
         await self._drop_errors(message, chat)
         sent = await message.answer(text, reply_markup=markup)
+        chat.sent_at[sent.message_id] = self.clock()
         await self._relocate(chat, message, sent.message_id, list_name, tr)
         chat.states[sent.message_id] = state
+        await self.fold(message.bot, message.chat.id)
 
     async def show_in(self, message: Message, tr: Translator, state: ListState) -> None:
         """Turn ``message`` (a bot message) into the live list message."""
@@ -242,6 +256,7 @@ class ShoppingUI:
         with suppress(*_TELEGRAM_ERRORS):
             await _edit(message.bot, message.chat.id, message.message_id, text, markup)
         if chat.live_message_id != message.message_id:
+            chat.sent_at.setdefault(message.message_id, message.date)
             await self._relocate(chat, message, message.message_id, list_name, tr)
         chat.states[message.message_id] = state
 
@@ -328,6 +343,55 @@ class ShoppingUI:
                     chat_id=message.chat.id,
                     message_id=chat.history_message_id,
                 )
+            chat.note_entry(
+                chat.history_message_id, list_name, events, self.clock(), _owner_id(message)
+            )
+        chat.sent_at.pop(old_id, None)
+
+    # --- folding old history entries (HISTORY_FOLD_HOURS) ---------------------
+
+    async def fold(self, bot: Bot | None, chat_id: int) -> None:
+        """Fold history entries that are old enough into the chat's one history message.
+
+        The lines go into the fold message, edited in place (bots may edit their
+        own messages without a time limit); the entries themselves are deleted.
+        Without a fold message (first fold, or the user deleted it) the oldest
+        due entry is rewritten into it, so nothing new appears below the list.
+        Only the bot's own history entries are touched. The caller holds the lock.
+        """
+        if self.fold_after is None or bot is None:
+            return
+        chat = self.chat(chat_id)
+        due = chat.take_due(self.clock(), self.fold_after)
+        if not due:
+            return
+        tr = Translator(chat.language or DEFAULT_LANGUAGE)
+        lines: list[str] = []
+        for entry in due:
+            if entry.list_name != chat.fold_list:
+                lines.append(tr("history.fold_list", list=escape(entry.list_name)))
+                chat.fold_list = entry.list_name
+            lines.extend(history_lines(entry.events, tr, owner_id=entry.owner_id, always_date=True))
+        chat.add_fold_lines(lines)
+        text = "\n".join([tr("history.fold_header"), *chat.fold_lines])
+        if chat.fold_message_id is None or not await _edit_plain(
+            bot, chat_id, chat.fold_message_id, text
+        ):
+            # The oldest due entry becomes the fold message.
+            chat.fold_message_id = due[0].message_id
+            due = due[1:]
+            if not await _edit_plain(bot, chat_id, chat.fold_message_id, text):
+                chat.fold_message_id = None
+        for entry in due:
+            try:
+                await bot.delete_message(chat_id, entry.message_id)
+            except _TELEGRAM_ERRORS as exc:
+                log.info("Could not delete history entry %s: %s", entry.message_id, exc)
+
+    async def fold_all(self, bot: Bot) -> None:
+        for chat_id in list(self.chats):
+            async with self.locked(chat_id):
+                await self.fold(bot, chat_id)
 
     async def _remove(
         self, bot: Bot, chat_id: int, message_id: int, list_name: str, tr: Translator
@@ -406,6 +470,18 @@ async def _edit(
     return True
 
 
+async def _edit_plain(bot: Bot, chat_id: int, message_id: int, text: str) -> bool:
+    """Edit a message without buttons; False if it is gone or cannot be edited."""
+    try:
+        await bot.edit_message_text(text, chat_id=chat_id, message_id=message_id)
+    except _TELEGRAM_ERRORS as exc:
+        if "message is not modified" in str(exc):
+            return True
+        log.info("Could not edit history message %s: %s", message_id, exc)
+        return False
+    return True
+
+
 def _owner_id(message: Message) -> int | None:
     """The user a private chat belongs to; their own name is left out of the history."""
     return message.chat.id if message.chat.type == "private" else None
@@ -424,8 +500,30 @@ def build_router(context: FeatureContext) -> Router:
         label_emoji=context.settings.label_emoji,
         label_icons=context.settings.label_icons,
         transient=context.transient,
+        history_fold_hours=context.settings.history_fold_hours,
     )
     router = Router(name="shopping")
+
+    if ui.fold_after is not None:
+        tasks: list[asyncio.Task[None]] = []
+
+        async def fold_loop(bot: Bot) -> None:
+            # Without this, entries of a quiet chat would pass Telegram's 48 hours.
+            while True:
+                await asyncio.sleep(FOLD_INTERVAL_SECONDS)
+                try:
+                    await ui.fold_all(bot)
+                except Exception:  # keep folding; one failure must not stop the loop
+                    log.exception("Folding history entries failed")
+
+        @router.startup()
+        async def start_folding(bot: Bot) -> None:
+            tasks.append(asyncio.create_task(fold_loop(bot)))
+
+        @router.shutdown()
+        async def stop_folding() -> None:
+            for task in tasks:
+                task.cancel()
 
     async def send_error(target: Message, tr: Translator, exc: Exception) -> None:
         if isinstance(exc, NoShoppingListError):

@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 
 from mealie_bot.features.shopping.render import VIEW_DONE, VIEW_OPEN
 from mealie_bot.features.shopping.state import (
+    MAX_FOLD_TEXT,
     MAX_HISTORY_EVENTS,
     MAX_HISTORY_ITEMS,
     ChatState,
@@ -113,3 +114,37 @@ def test_render_history_hides_the_chat_owners_own_name():
         render_history("G", events, Translator("en")).split("\n")[1]
         == "<i>21:00 · Alice</i> ➕ Milk"
     )
+
+
+def test_entries_are_due_after_the_setting_or_before_telegrams_limit():
+    chat = ChatState()
+    chat.sent_at[1] = T0 - timedelta(hours=40)
+    chat.note_entry(1, "Groceries", [event("added", items=["Milk"])], T0)
+    chat.note_entry(2, "Groceries", [event("added", items=["Eggs"])], T0)
+    chat.history_message_id = 2
+    assert chat.take_due(T0 + timedelta(hours=6), timedelta(hours=24)) == []
+    # Entry 1 was a list message for 40 hours already: it goes at 47 hours.
+    due = chat.take_due(T0 + timedelta(hours=7), timedelta(hours=24))
+    assert [entry.message_id for entry in due] == [1]
+    assert [e.message_id for e in chat.take_due(T0 + timedelta(hours=24), timedelta(hours=24))] == [
+        2
+    ]
+    # The entry new changes would have extended is gone.
+    assert chat.history_message_id is None and chat.history_entries == []
+
+
+def test_rewriting_an_entry_updates_it():
+    chat = ChatState()
+    chat.note_entry(1, "Groceries", [event("added", items=["Milk"])], T0)
+    chat.note_entry(
+        1, "Groceries", [event("added", items=["Milk", "Eggs"])], T0 + timedelta(hours=1)
+    )
+    assert len(chat.history_entries) == 1
+    assert chat.history_entries[0].written_at == T0 + timedelta(hours=1)
+
+
+def test_fold_lines_keep_the_newest_that_fit():
+    chat = ChatState()
+    chat.add_fold_lines([f"line {i:04} " + "x" * 90 for i in range(100)])
+    assert len("\n".join(chat.fold_lines)) <= MAX_FOLD_TEXT
+    assert chat.fold_lines[-1].startswith("line 0099") and len(chat.fold_lines) < 100

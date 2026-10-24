@@ -131,3 +131,15 @@ def test_version_matches_pyproject():
 def test_revision_is_a_short_commit_or_none(monkeypatch, value, expected):
     monkeypatch.setenv("VCS_REF", value)
     assert mealie_bot.revision() == expected
+
+
+@pytest.mark.parametrize(("value", "hours"), [(None, 24), ("0", 0), ("47", 47), (" 6 ", 6)])
+def test_history_fold_hours(value, hours):
+    env = dict(BASE) if value is None else {**BASE, "HISTORY_FOLD_HOURS": value}
+    assert Settings.from_env(env).history_fold_hours == hours
+
+
+@pytest.mark.parametrize("value", ["48", "-1", "1.5", "a day"])
+def test_history_fold_hours_must_stay_below_telegrams_limit(value):
+    with pytest.raises(ConfigError, match="HISTORY_FOLD_HOURS"):
+        Settings.from_env({**BASE, "HISTORY_FOLD_HOURS": value})

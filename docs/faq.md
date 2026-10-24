@@ -101,7 +101,11 @@ Set the container's time zone with `TZ`, for example `TZ=Europe/Berlin`.
 **What are the small "📜" messages above the list?**
 History entries. When the list moves to the bottom of the chat, the old list
 message is rewritten into a summary of who added, ticked off or removed what.
-Changes within 15 minutes share one entry.
+Changes within 15 minutes share one entry. After a day (`HISTORY_FOLD_HOURS`)
+an entry is folded into one *Earlier changes* message, so the chat holds that
+message, the recent entries and the list. You may delete the history message;
+the bot starts a new one. Entries from before a restart of the bot stay, and
+after a restart the bot starts a new *Earlier changes* message.
 
 **Can I add recipes or a meal plan?**
 Not yet. Version 1 is the shopping list only; the module structure leaves room

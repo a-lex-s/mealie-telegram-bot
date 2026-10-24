@@ -18,6 +18,9 @@ from mealie_bot.i18n.labels import LABEL_ICON_MODES, parse_label_emoji
 # Feature modules that exist in this build, with their default state.
 KNOWN_FEATURES: dict[str, bool] = {"shopping": True}
 
+# Bots can delete messages for 48 hours; folding must happen before that.
+MAX_HISTORY_FOLD_HOURS = 47
+
 _TRUE = {"1", "true", "yes", "on"}
 _FALSE = {"0", "false", "no", "off"}
 
@@ -94,6 +97,8 @@ class Settings:
     label_emoji: Mapping[str, str] = field(default_factory=dict)
     # What is shown in front of category names: both, color, emoji or none (LABEL_ICONS).
     label_icons: str = "both"
+    # HISTORY_FOLD_HOURS: history entries older than this go into one message; 0 = off.
+    history_fold_hours: int = 24
     log_level: str = "INFO"
     http_timeout: float = 10.0
 
@@ -131,6 +136,15 @@ class Settings:
         if label_icons not in LABEL_ICON_MODES:
             raise ConfigError("LABEL_ICONS must be one of: " + ", ".join(LABEL_ICON_MODES))
 
+        fold_raw = _read(env, "HISTORY_FOLD_HOURS") or "24"
+        try:
+            fold_hours = int(fold_raw)
+        except ValueError:
+            raise ConfigError("HISTORY_FOLD_HOURS must be a whole number of hours") from None
+        if not 0 <= fold_hours <= MAX_HISTORY_FOLD_HOURS:
+            # Bots can delete messages for 48 hours only.
+            raise ConfigError(f"HISTORY_FOLD_HOURS must be between 0 and {MAX_HISTORY_FOLD_HOURS}")
+
         timeout_raw = _read(env, "MEALIE_TIMEOUT") or "10"
         try:
             timeout = float(timeout_raw)
@@ -152,6 +166,7 @@ class Settings:
             delete_item_messages=_bool(env, "DELETE_ITEM_MESSAGES", True),
             label_emoji=parse_label_emoji(_read(env, "LABEL_EMOJI")),
             label_icons=label_icons,
+            history_fold_hours=fold_hours,
             log_level=log_level,
             http_timeout=timeout,
         )

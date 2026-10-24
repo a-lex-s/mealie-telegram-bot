@@ -1563,3 +1563,153 @@ async def test_category_name_reply_edge_cases(harness, mealie_mock):
     )
     await feed(message("Saucen", language="de", message_id=33, reply_to=_reply_to(prompt_id)))
     assert create.call_count == 1
+
+
+# --- folding old history entries ----------------------------------------------
+
+
+class Clock:
+    def __init__(self):
+        self.now = datetime(2026, 1, 1, 10, 0, tzinfo=UTC)
+
+    def __call__(self):
+        return self.now
+
+    def advance(self, **delta):
+        from datetime import timedelta
+
+        self.now += timedelta(**delta)
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    clock = Clock()
+    monkeypatch.setattr("mealie_bot.features.shopping.handlers._local_now", clock)
+    return clock
+
+
+async def add_and_show(feed, mealie_mock, text, message_id):
+    mealie_mock.post("/api/households/shopping/items/create-bulk").respond(
+        201, json={"createdItems": [make_item(f"n-{message_id}", text)]}
+    )
+    await feed(message(text, message_id=message_id))
+
+
+async def test_old_history_entries_fold_into_one_message(harness, mealie_mock, clock):
+    feed, session = harness
+    mock_list(mealie_mock)
+    await feed(message("/list"))
+    first_list = session.next_id
+    await add_and_show(feed, mealie_mock, "Eggs", 2)  # first list -> entry 1
+    clock.advance(hours=1)
+    second_list = session.next_id
+    await add_and_show(feed, mealie_mock, "Milk", 3)  # second list -> entry 2
+    clock.advance(hours=2)
+    await add_and_show(feed, mealie_mock, "Bread", 4)
+    deleted_before = [d.message_id for d in session.sent(DeleteMessage)]
+
+    clock.advance(hours=24)
+    await feed(message("/list", message_id=5))
+    # The oldest entry became the fold message, the next one was deleted.
+    fold = [e for e in session.sent(EditMessageText) if e.message_id == first_list][-1]
+    assert fold.text.startswith("📜 <b>Earlier changes</b>\n<b>Groceries</b>\n")
+    assert "Jan 01 10:00</i> ➕ Eggs" in fold.text and "Jan 01 11:00</i> ➕ Milk" in fold.text
+    assert fold.reply_markup is None
+    deleted = [d.message_id for d in session.sent(DeleteMessage)][len(deleted_before) :]
+    assert second_list in deleted and first_list not in deleted
+
+    # Later entries are appended to the same message.
+    clock.advance(hours=25)
+    await feed(message("/list", message_id=6))
+    fold = [e for e in session.sent(EditMessageText) if e.message_id == first_list][-1]
+    assert fold.text.count("<b>Groceries</b>") == 1 and "➕ Bread" in fold.text
+
+
+async def test_a_deleted_fold_message_is_replaced(harness, mealie_mock, clock):
+    feed, session = harness
+    mock_list(mealie_mock)
+    await feed(message("/list"))
+    fold_id = session.next_id
+    await add_and_show(feed, mealie_mock, "Eggs", 2)
+    clock.advance(hours=25)
+    await feed(message("/list", message_id=3))
+    assert "Earlier changes" in session.last(EditMessageText).text
+    entry_id = session.next_id
+    await add_and_show(feed, mealie_mock, "Milk", 4)
+
+    # The user deleted the fold message in the meantime.
+    original = session.make_request
+
+    async def make_request(bot, method, timeout=None):
+        if isinstance(method, EditMessageText) and method.message_id == fold_id:
+            raise TelegramBadRequest(method, "Bad Request: message to edit not found")
+        return await original(bot, method, timeout)
+
+    session.make_request = make_request
+    clock.advance(hours=25)
+    await feed(message("/list", message_id=5))
+    fold = session.last(EditMessageText)
+    while "Earlier changes" not in fold.text:
+        fold = session.sent(EditMessageText)[session.sent(EditMessageText).index(fold) - 1]
+    # The next entry took its place and keeps the earlier lines.
+    assert fold.message_id == entry_id
+    assert "➕ Eggs" in fold.text and "➕ Milk" in fold.text
+
+
+@pytest.mark.parametrize("harness", [{"history_fold_hours": 0}], indirect=True)
+async def test_folding_can_be_switched_off(harness, mealie_mock, clock):
+    feed, session = harness
+    mock_list(mealie_mock)
+    await feed(message("/list"))
+    await add_and_show(feed, mealie_mock, "Eggs", 2)
+    clock.advance(hours=30)
+    await feed(message("/list", message_id=3))
+    assert not [e for e in session.sent(EditMessageText) if "Earlier changes" in e.text]
+
+
+async def test_entries_fold_before_telegram_stops_deleting(harness, mealie_mock, clock):
+    feed, session = harness
+    mock_list(mealie_mock)
+    await feed(message("/list"))
+    first_list = session.next_id
+    # The list message lives for 46 hours before it becomes a history entry.
+    clock.advance(hours=46)
+    await add_and_show(feed, mealie_mock, "Eggs", 2)
+    clock.advance(hours=1)
+    await feed(message("/list", message_id=3))
+    fold = [e for e in session.sent(EditMessageText) if e.message_id == first_list][-1]
+    assert "Earlier changes" in fold.text
+
+
+async def test_fold_loop_runs_without_activity(harness, mealie_mock, clock, monkeypatch):
+    import mealie_bot.features.shopping.handlers as handlers
+
+    monkeypatch.setattr(handlers, "FOLD_INTERVAL_SECONDS", 0.01)
+    client = MealieClient(BASE_URL, TOKEN)
+    session = RecordingSession()
+    bot = Bot("123456:placeholder", session=session)
+    dispatcher = build_dispatcher(settings(), client)
+    mock_list(mealie_mock)
+    await dispatcher.feed_update(bot, message("/list"))
+    first_list = session.next_id
+    mealie_mock.post("/api/households/shopping/items/create-bulk").respond(
+        201, json={"createdItems": [make_item("n-1", "Eggs")]}
+    )
+    await dispatcher.feed_update(bot, message("Eggs", message_id=2))
+    clock.advance(hours=25)
+    await dispatcher.emit_startup(bot=bot)
+    try:
+        for _ in range(100):
+            if any(
+                isinstance(c, EditMessageText)
+                and "Earlier" in c.text
+                and c.message_id == first_list
+                for c in session.calls
+            ):
+                break
+            await asyncio.sleep(0.01)
+        else:
+            pytest.fail("the fold loop did not run")
+    finally:
+        await dispatcher.emit_shutdown(bot=bot)
+        await client.aclose()

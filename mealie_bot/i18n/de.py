@@ -171,6 +171,9 @@ MESSAGES: dict[str, str] = {
     "shopping.only_list": "📋 Es gibt nur die Liste <b>{list}</b>.",
     "shopping.toast_refreshed": "🔄 Aktualisiert",
     "history.header": "📜 <b>{list}</b>",
+    # The one message that collects old history entries (HISTORY_FOLD_HOURS).
+    "history.fold_header": "📜 <b>Frühere Änderungen</b>",
+    "history.fold_list": "<b>{list}</b>",
     "history.superseded": "📜 <b>{list}</b>\n<i>↓ Die aktuelle Liste steht weiter unten.</i>",
     "history.line": "<i>{time} · {user}</i> {what}",
     # Day shown before the time for entries from another day (strftime format).

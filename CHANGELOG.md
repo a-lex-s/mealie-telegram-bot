@@ -34,6 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SHOPPING_CREATE_FOODS` (default `false`) creates a Mealie food without a
   category for unknown item names, so they can be sorted later; *Undo*
   deletes them again.
+- Old history entries are folded into one *Earlier changes* message per chat
+  after `HISTORY_FOLD_HOURS` (default 24, `0` off, at most 47), so the chat
+  holds that message, the recent entries and the list.
 
 ### Changed
 

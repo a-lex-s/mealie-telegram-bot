@@ -176,6 +176,9 @@ MESSAGES: dict[str, str] = {
     "shopping.toast_refreshed": "🔄 Refreshed",
     # History entries (old list messages are rewritten into these)
     "history.header": "📜 <b>{list}</b>",
+    # The one message that collects old history entries (HISTORY_FOLD_HOURS).
+    "history.fold_header": "📜 <b>Earlier changes</b>",
+    "history.fold_list": "<b>{list}</b>",
     # An old list message that could not be deleted (Telegram allows that for 48 hours only).
     "history.superseded": "📜 <b>{list}</b>\n<i>↓ The current list is further down.</i>",
     "history.line": "<i>{time} · {user}</i> {what}",

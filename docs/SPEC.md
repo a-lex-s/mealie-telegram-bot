@@ -58,6 +58,7 @@ bot at start-up with exit code 2 and a message that never contains secret values
 | `DELETE_ITEM_MESSAGES` | no | `true` | Delete the user's item messages once the items were added; the history entry records them |
 | `LABEL_EMOJI` | no | keyword table | Emoji per Mealie label name, `Name=🌶️;Other=🐾`; overrides an emoji in the label name and the built-in keyword table (6.4) |
 | `LABEL_ICONS` | no | `both` | What is shown in front of category names: `both`, `color`, `emoji` or `none` (6.4) |
+| `HISTORY_FOLD_HOURS` | no | `24` | History entries older than this many hours are folded into one history message (6.6); `0` turns it off, at most `47` |
 | `MEALIE_TIMEOUT` | no | `10` | HTTP timeout for Mealie requests in seconds |
 | `TZ` | no | UTC | Time zone of the container; used for the "as of" time in list messages and history entries |
 | `LOG_LEVEL` | no | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR` |
@@ -352,6 +353,29 @@ is not simply deleted:
 
 History entries therefore accumulate above the live list and move up as the
 chat grows. The history lives in memory and starts fresh after a restart.
+
+**Folding old entries** (`HISTORY_FOLD_HOURS`, default 24, `0` off, at most 47):
+
+* An entry is folded once its last change is that many hours old, or at the
+  latest 47 hours after Telegram created the message (it was a list message
+  before; bots can delete messages for 48 hours only).
+* Folding deletes the entry and appends its lines to one history message per
+  chat, headed `📜 <b>Earlier changes</b>`, with the list name as a bold line
+  whenever it changes and the date before every time (`Jan 01 21:12`). Bots
+  may edit their own messages without a time limit, so this message grows in
+  place; it keeps the newest lines that fit into one Telegram message.
+* The first fold rewrites the oldest due entry into that message instead of
+  sending a new one, so nothing appears below the live list. If the user
+  deleted the history message, the next fold starts a new one the same way.
+* The check runs whenever the list is shown and every 10 minutes, so entries
+  of a quiet chat are folded in time too. The chat then holds at most the
+  history message, the entries younger than the setting and the live list.
+* Only the bot's own history entries are deleted, never user messages, the
+  live list or the stubs of 6.6. A delete or edit that fails is logged once
+  (`INFO`) and the entry is left alone.
+* Entries written before a restart are not known to the bot and stay in the
+  chat until the bot keeps its state across restarts. The same goes for the
+  history message: after a restart the next fold starts a second one.
 
 ### 6.7 Errors
 

@@ -19,6 +19,7 @@ readable by that user (Compose bind-mounts it with its host permissions).
 | `DELETE_ITEM_MESSAGES` | no | `true` | Delete your item messages (`2 l milk, eggs`) once the items are on the list; set `false` to keep them |
 | `LABEL_EMOJI` | no | built-in table | Emoji per Mealie label, e.g. `Würzmittel=🌶️;Tiere=🐾`; names must match exactly (case does not matter) and win over an emoji in the label name and the built-in keyword table |
 | `LABEL_ICONS` | no | `both` | What category buttons show in front of the name: `both` (colour circle and emoji, `🟣 🧂 Würzmittel`), `color` (`🟣 Würzmittel`), `emoji` (`🧂 Würzmittel`) or `none` (`Würzmittel`) |
+| `HISTORY_FOLD_HOURS` | no | `24` | History entries (📜) older than this many hours are folded into one history message above the recent entries, so the chat stays short; `0` keeps every entry, at most `47` because Telegram lets bots delete messages for 48 hours only |
 | `MEALIE_TIMEOUT` | no | `10` | Mealie request timeout in seconds |
 | `TZ` | no | UTC | Container time zone, e.g. `Europe/Berlin`; used for the "as of" time and history times |
 | `LOG_LEVEL` | no | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR` |

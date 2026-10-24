@@ -34,6 +34,7 @@ services:
       # DELETE_ITEM_MESSAGES: "true"  # delete your item messages once added; "false" keeps them
       # LABEL_EMOJI: "Würzmittel=🌶️;Tiere=🐾"  # emoji per label name; otherwise a keyword table
       # LABEL_ICONS: both          # before category names: both, color, emoji or none
+      # HISTORY_FOLD_HOURS: "24"   # fold older history entries into one message; "0" = off
       # TZ: Europe/Berlin          # time zone for the "as of" and history times
       # LOG_LEVEL: INFO
     secrets:
