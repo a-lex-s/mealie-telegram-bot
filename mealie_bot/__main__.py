@@ -10,7 +10,7 @@ from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
-from mealie_bot import __version__
+from mealie_bot import __version__, revision
 from mealie_bot.config import ConfigError, Settings
 from mealie_bot.logging_setup import setup_logging
 from mealie_bot.mealie import MealieClient, MealieError
@@ -45,7 +45,8 @@ def main() -> int:
         print(f"Configuration error: {exc}", file=sys.stderr)
         return 2
     setup_logging(settings.log_level, settings.secrets)
-    log.info("Starting mealie-telegram-bot %s", __version__)
+    commit = revision()
+    log.info("Starting mealie-telegram-bot %s%s", __version__, f" ({commit})" if commit else "")
     try:
         asyncio.run(run(settings))
     except KeyboardInterrupt:

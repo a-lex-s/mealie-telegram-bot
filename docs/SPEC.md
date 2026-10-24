@@ -102,7 +102,7 @@ Mealie as done by that user. Its household determines which lists are visible.
 |---|---|---|---|
 | start | `/start` | `/start` | Short greeting, then one introduction per enabled feature (shopping: example message and an expandable tips block) |
 | help | `/help` | `/hilfe` | Short intro, then one usage section per enabled feature |
-| version | `/version` | `/version` | Package version and, if the image was built with `VCS_REF`, the short commit (7 characters); the version alone otherwise (local runs). Not in the command menu |
+| version | `/version` | `/version` | Package version and, if the image was built with `VCS_REF`, the short commit (7 characters); the version alone otherwise (local runs, or a value that is not a commit hash). Not in the command menu |
 | list | `/list` | `/liste` | Show the active list |
 | lists | `/lists` | `/listen` | Choose the active list |
 | clear | `/clear` | `/aufraeumen` | Delete all ticked-off items of the active list, after confirmation |
@@ -118,7 +118,8 @@ With `DELETE_COMMANDS=true` (default) the bot deletes the user's `/list`,
 `/lists`, `/clear`, `/category`, `/categories` and `/version` messages before it
 shows the list or the answer, so the chat holds
 the list and the history instead of a trail of commands. `/start` and `/help`
-are never deleted.
+are never deleted. The `/version` answer, like the bot's other info replies,
+is deleted the next time the list is shown.
 
 With `DELETE_ITEM_MESSAGES=true` (default) a plain text message is deleted as
 soon as its items are in Mealie, before the list is shown (see 6.3); the
@@ -482,7 +483,8 @@ OpenAPI file, for example one exported from a newer instance.
   GitHub build provenance attestation pushed to the registry. A GitHub release
   is created, or updated on a re-run, with generated notes, the image digest
   and the SPDX SBOM attached. The commit is also passed to the image as the
-  `VCS_REF` build argument, which `/version` shows. Every job has a timeout.
+  `VCS_REF` build argument, which `/version` and the start-up log line show.
+  Every job has a timeout.
 * Deployment happens elsewhere: the image is pulled by tag and digest into a
   Compose stack that shares a network with Mealie. See `compose.example.yml`.
 * The container runs as UID 10001 with a read-only root file system and no

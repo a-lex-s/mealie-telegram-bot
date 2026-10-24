@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from aiogram import Router
 
@@ -11,10 +11,26 @@ from mealie_bot.config import Settings
 from mealie_bot.mealie import MealieClient
 
 
+class TransientMessages:
+    """Short bot replies per chat that are deleted once the chat's main message
+    (the shopping list) is shown again. Shared by the core commands and the
+    features, so a ``/version`` answer goes like a feature's own info replies."""
+
+    def __init__(self) -> None:
+        self._ids: dict[int, list[int]] = {}
+
+    def add(self, chat_id: int, message_id: int) -> None:
+        self._ids.setdefault(chat_id, []).append(message_id)
+
+    def take(self, chat_id: int) -> list[int]:
+        return self._ids.pop(chat_id, [])
+
+
 @dataclass(frozen=True)
 class FeatureContext:
     settings: Settings
     mealie: MealieClient
+    transient: TransientMessages = field(default_factory=TransientMessages)
 
 
 @dataclass(frozen=True)

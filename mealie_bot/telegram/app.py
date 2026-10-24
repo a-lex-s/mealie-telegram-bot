@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from collections.abc import Callable
 from contextlib import suppress
 
@@ -12,9 +11,9 @@ from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command, CommandStart
 from aiogram.types import BotCommand, BotCommandScopeDefault, Message
 
-from mealie_bot import __version__
+from mealie_bot import __version__, revision
 from mealie_bot.config import Settings
-from mealie_bot.features import Feature, FeatureContext, available_features
+from mealie_bot.features import Feature, FeatureContext, TransientMessages, available_features
 from mealie_bot.i18n import CATALOGS, DEFAULT_LANGUAGE, Translator, command_names
 from mealie_bot.mealie import MealieClient
 from mealie_bot.telegram.middleware import AccessMiddleware, I18nMiddleware
@@ -31,13 +30,14 @@ def _command_args(tr: Translator) -> dict[str, str]:
     return {key: tr.command(key) for key in CATALOGS[tr.language].COMMANDS}
 
 
-def _short_commit() -> str | None:
-    """The commit the image was built from (``VCS_REF``); unset for local runs."""
-    return os.environ.get("VCS_REF", "").strip()[:7] or None
-
-
-def build_core_router(features: list[Feature], *, delete_commands: bool = False) -> Router:
+def build_core_router(
+    features: list[Feature],
+    *,
+    delete_commands: bool = False,
+    transient: TransientMessages | None = None,
+) -> Router:
     router = Router(name="core")
+    transient = transient or TransientMessages()
 
     def sections(tr: Translator, intro_key: str, key: Callable[[Feature], str]) -> str:
         """The intro followed by one section per enabled feature."""
@@ -59,11 +59,13 @@ def build_core_router(features: list[Feature], *, delete_commands: bool = False)
         if delete_commands:
             with suppress(TelegramBadRequest, TelegramForbiddenError):
                 await message.delete()
-        commit = _short_commit()
+        commit = revision()
         if commit:
-            await message.answer(tr("version.commit", version=__version__, commit=commit))
+            sent = await message.answer(tr("version.commit", version=__version__, commit=commit))
         else:
-            await message.answer(tr("version", version=__version__))
+            sent = await message.answer(tr("version", version=__version__))
+        # The answer goes when the list is shown next, like other info replies.
+        transient.add(message.chat.id, sent.message_id)
 
     return router
 
@@ -93,8 +95,12 @@ def build_dispatcher(settings: Settings, mealie: MealieClient) -> Dispatcher:
         observer.middleware(I18nMiddleware(settings.bot_language))
 
     features = enabled_features(settings)
-    dispatcher.include_router(build_core_router(features, delete_commands=settings.delete_commands))
     context = FeatureContext(settings=settings, mealie=mealie)
+    dispatcher.include_router(
+        build_core_router(
+            features, delete_commands=settings.delete_commands, transient=context.transient
+        )
+    )
     for feature in features:
         dispatcher.include_router(feature.build_router(context))
         log.info("Feature enabled: %s", feature.name)

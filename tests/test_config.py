@@ -1,5 +1,6 @@
 import pytest
 
+import mealie_bot
 from mealie_bot.config import ConfigError, Settings
 
 BASE = {
@@ -111,3 +112,19 @@ def test_version_matches_pyproject():
 
     pyproject = tomllib.loads((Path(__file__).parent.parent / "pyproject.toml").read_text())
     assert pyproject["project"]["version"] == mealie_bot.__version__
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("", None),
+        ("0123456789ABCDEF0123456789abcdef01234567", "0123456"),
+        ("abc1234", "abc1234"),
+        ("abc12", None),
+        ("main", None),
+        ("<b>0123456", None),
+    ],
+)
+def test_revision_is_a_short_commit_or_none(monkeypatch, value, expected):
+    monkeypatch.setenv("VCS_REF", value)
+    assert mealie_bot.revision() == expected

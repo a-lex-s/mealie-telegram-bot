@@ -22,7 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of 📦. An emoji at the start of a label name in Mealie is used as
   its emoji.
 - `/version` shows the running version and, in release images, the short
-  commit. It is not listed in the command menu.
+  commit. It is not listed in the command menu, and its answer is deleted
+  the next time the list is shown. The start-up log line shows the commit too.
 - `LABEL_ICONS` (`both`, `color`, `emoji`, `none`) chooses what is shown in
   front of category names.
 

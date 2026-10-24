@@ -203,6 +203,24 @@ async def test_version_with_commit_shows_the_short_commit(harness, monkeypatch, 
     )
 
 
+async def test_version_ignores_a_value_that_is_no_commit(harness, monkeypatch):
+    feed, session = harness
+    monkeypatch.setenv("VCS_REF", "<b>main")
+    await feed(message("/version"))
+    assert session.last(SendMessage).text == f"🔖 <b>mealie-telegram-bot</b> {__version__}"
+
+
+async def test_version_answer_goes_when_the_list_is_shown(harness, mealie_mock, monkeypatch):
+    feed, session = harness
+    monkeypatch.delenv("VCS_REF", raising=False)
+    mock_list(mealie_mock)
+    await feed(message("/version", message_id=7))
+    answer_id = session.next_id
+    assert [(d.chat_id, d.message_id) for d in session.sent(DeleteMessage)] == [(ALICE, 7)]
+    await feed(message("/list", message_id=8))
+    assert answer_id in [d.message_id for d in session.sent(DeleteMessage)]
+
+
 @pytest.mark.parametrize("harness", [{"delete_commands": False}], indirect=True)
 async def test_version_is_kept_when_commands_are_kept(harness, monkeypatch):
     feed, session = harness

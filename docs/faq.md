@@ -105,4 +105,5 @@ for more.
 **How do I update?**
 Change the image tag (and digest) in your Compose file and run
 `docker compose up -d mealie-telegram-bot`. Releases are listed in
-[CHANGELOG.md](../CHANGELOG.md).
+[CHANGELOG.md](../CHANGELOG.md). Send `/version` afterwards to see which
+release and commit is running.

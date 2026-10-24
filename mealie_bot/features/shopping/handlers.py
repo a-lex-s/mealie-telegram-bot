@@ -35,7 +35,7 @@ from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from mealie_bot.features import FeatureContext
+from mealie_bot.features import FeatureContext, TransientMessages
 from mealie_bot.features.shopping.parser import (
     MAX_LABEL_LENGTH,
     EntryTooLong,
@@ -115,8 +115,11 @@ class ShoppingUI:
         clock: Clock = _local_now,
         label_emoji: Mapping[str, str] | None = None,
         label_icons: str = "both",
+        transient: TransientMessages | None = None,
     ) -> None:
         self.service = service
+        # Replies of the core commands (``/version``) that go with the shopping ones.
+        self.transient = transient or TransientMessages()
         self.delete_commands = delete_commands
         self.delete_item_messages = delete_item_messages
         self.label_emoji = label_emoji
@@ -238,7 +241,11 @@ class ShoppingUI:
     async def _drop_errors(self, message: Message, chat: ChatState) -> None:
         """Delete the bot's own error and info messages, and questions nobody
         answered, once the list is shown again."""
-        ids = [*chat.transient_message_ids, *chat.questions]
+        ids = [
+            *chat.transient_message_ids,
+            *chat.questions,
+            *self.transient.take(message.chat.id),
+        ]
         chat.transient_message_ids, chat.questions = [], {}
         if message.bot is None:  # pragma: no cover - messages from the dispatcher carry a bot
             return
@@ -365,6 +372,7 @@ def build_router(context: FeatureContext) -> Router:
         delete_item_messages=context.settings.delete_item_messages,
         label_emoji=context.settings.label_emoji,
         label_icons=context.settings.label_icons,
+        transient=context.transient,
     )
     router = Router(name="shopping")
 

@@ -38,7 +38,8 @@ python -m mealie_bot
 
 To run the container instead of the venv against a Mealie on `localhost`, use
 the commented variant in [compose.example.yml](../compose.example.yml)
-(`network_mode: host`).
+(`network_mode: host`). A local build shows no commit in `/version` unless you
+pass one: `docker build --build-arg VCS_REF=$(git rev-parse HEAD) .`
 
 The Mealie client is checked against a trimmed OpenAPI document in
 `tests/data/` on every test run. To check it against your own instance,
