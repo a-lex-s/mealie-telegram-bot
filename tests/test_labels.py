@@ -38,6 +38,65 @@ def test_keyword_matching(name, emoji):
     assert label_emoji(name) == emoji
 
 
+MEALIE_DEFAULT_LABELS = [
+    # English seed (mealie/repos/seed/resources/foods/locales/en-US.json).
+    ("Produce", "🥕"),
+    ("Grains", "🍝"),
+    ("Meat", "🥩"),
+    ("Meat Products", "🥩"),
+    ("Seafood", "🐟"),
+    ("Dairy Products", "🥛"),
+    ("Baked Goods", "🍞"),
+    ("Canned Goods", "🥫"),
+    ("Frozen Foods", "🧊"),
+    ("Condiments", "🧂"),
+    ("Spices", "🧂"),
+    ("Oils", "🫒"),
+    ("Baking", "🧁"),
+    ("Sweets", "🍫"),
+    ("Snacks", "🍫"),
+    ("Beverages", "🥤"),
+    ("Alcohol", "🍷"),
+    ("Health Foods", "🥗"),
+    ("Household", "🧻"),
+    ("Other", FALLBACK_EMOJI),
+    # German seed (mealie/repos/seed/resources/foods/locales/de-DE.json).
+    ("Obst & Gemüse", "🍎"),
+    ("Getreide", "🍝"),
+    ("Fleisch", "🥩"),
+    ("Fleischprodukte", "🥩"),
+    ("Meeresfrüchte", "🐟"),
+    ("Milchprodukte", "🥛"),
+    ("Backwaren", "🍞"),
+    ("Konserven", "🥫"),
+    ("Tiefkühlware", "🧊"),
+    ("Würzmittel", "🧂"),
+    ("Gewürze", "🧂"),
+    ("Öle", "🫒"),
+    ("Backzutaten", "🧁"),
+    ("Süßigkeiten", "🍫"),
+    ("Snacks", "🍫"),
+    ("Getränke", "🥤"),
+    ("Alkohol", "🍷"),
+    ("Pflanzliche Ersatzprodukte", "🌱"),
+    ("Haushalt", "🧻"),
+    ("Sonstiges", FALLBACK_EMOJI),
+]
+
+
+@pytest.mark.parametrize(("name", "emoji"), MEALIE_DEFAULT_LABELS)
+def test_mealie_default_labels(name, emoji):
+    assert label_emoji(name) == emoji
+
+
+def test_toilet_paper_is_not_spiced():
+    assert label_emoji("Toilet paper") == "🧴"
+
+
+def test_health_foods_is_not_medicine():
+    assert label_emoji("Health Foods") == "🥗"
+
+
 def test_override_beats_keywords():
     assert label_emoji("Würzmittel", {"würzmittel": "🌶️"}) == "🌶️"
     assert label_emoji("Tiere", {"tiere": "🐾"}) == "🐾"

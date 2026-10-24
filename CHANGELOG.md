@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- The emoji table now covers the shopping list labels Mealie seeds by default, in English and German.
+  Seeded names such as "Health Foods" and "Pflanzliche Ersatzprodukte" get a fitting emoji, and
+  "Toilet paper" no longer matches the oil keyword.
 
 ## [0.2.0] - 2026-10-24
 

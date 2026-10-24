@@ -51,27 +51,19 @@ _LEADING_EMOJI = re.compile(rf"^(?P<emoji>{_EMOJI}(?:\u200D{_EMOJI})*)\s*")
 
 # (emoji, keywords in any catalog language); order matters, first match wins.
 DEFAULT_LABEL_EMOJI: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("🐟", ("fisch", "fish", "seafood", "meeresfrüchte")),
     ("🍎", ("obst", "frucht", "früchte", "fruit")),
     ("🥕", ("gemüse", "vegetable", "produce", "salat", "salad")),
     ("🥛", ("milch", "molkerei", "dairy", "käse", "cheese", "joghurt", "yoghurt", "yogurt")),
     ("🥩", ("fleisch", "wurst", "meat", "geflügel", "poultry", "sausage")),
-    ("🐟", ("fisch", "fish", "seafood", "meeresfrüchte")),
     ("🍞", ("brot", "backwaren", "bakery", "bread", "baked goods")),
     ("🧁", ("backen", "backzutat", "baking", "mehl", "flour")),
     ("🍝", ("nudeln", "pasta", "reis", "rice", "getreide", "grain", "cereal", "müsli")),
     ("🥫", ("konserve", "canned", "dose", "dosen", "tins")),
     ("🧊", ("tiefkühl", "frozen", "gefroren", "tk")),
-    (
-        "🧂",
-        ("gewürz", "würz", "spice", "condiment", "sauce", "sosse", "sossen", "öl", "oil", "essig"),
-    ),
-    (
-        "🍫",
-        ("süss", "suess", "snack", "sweet", "candy", "schoko", "chocolate", "confect", "knabber"),
-    ),
-    ("☕", ("kaffee", "tee", "coffee", "tea")),
-    ("🍷", ("alkohol", "wein", "bier", "alcohol", "wine", "beer", "spirit")),
-    ("🥤", ("getränk", "drink", "beverage", "wasser", "water", "saft", "juice")),
+    ("🥗", ("health food",)),
+    ("🌱", ("ersatzprodukt", "plant based", "plant-based")),
+    ("🫒", ("oils", "öle")),
     (
         "🧴",
         (
@@ -85,6 +77,27 @@ DEFAULT_LABEL_EMOJI: tuple[tuple[str, tuple[str, ...]], ...] = (
             "cosmetic",
         ),
     ),
+    (
+        "🧂",
+        ("gewürz", "würz", "spice", "condiment", "sauce", "sosse", "sossen", "öl", "oil", "essig"),
+    ),
+    (
+        "🍫",
+        (
+            "süss",
+            "suess",
+            "snack",
+            "sweet",
+            "candy",
+            "schoko",
+            "chocolate",
+            "confect",
+            "knabber",
+        ),
+    ),
+    ("☕", ("kaffee", "tee", "coffee", "tea")),
+    ("🍷", ("alkohol", "wein", "bier", "alcohol", "wine", "beer", "spirit")),
+    ("🥤", ("getränk", "drink", "beverage", "wasser", "water", "saft", "juice")),
     ("🧻", ("haushalt", "household", "putz", "cleaning", "reinig", "waschmittel", "laundry")),
     ("💊", ("gesundheit", "health", "apotheke", "pharmacy", "medizin", "medicine")),
     ("🐾", ("tier", "pet", "hund", "katze", "dog", "cat")),
