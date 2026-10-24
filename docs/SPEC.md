@@ -389,6 +389,13 @@ safe to repeat (`GET`, `PUT`, `DELETE`) are retried once after half a second on
 connection errors; `POST` (bulk create) is not, to avoid duplicates. The bot
 starts even if Mealie is down and retries with each user action.
 
+Telegram flood control (`retry_after`) is waited out once; a second refusal is
+logged at `WARNING` and the update is dropped, so the user never sees an error
+for it. A chat that blocked the bot or no longer exists ("bot was blocked by the
+user", "chat not found") is forgotten while syncing the list, so later changes
+in other chats no longer try it. Syncing pauses briefly between chats so one
+change cannot turn into a burst of edits.
+
 A command no feature knows (`/foo`) gets "I do not know that command", and a
 message without text (photo, voice message, sticker) gets "I only understand
 text", each with a pointer to `/help`.

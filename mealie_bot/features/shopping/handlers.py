@@ -28,14 +28,19 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from collections.abc import AsyncIterator, Callable, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timedelta
 from html import escape
+from typing import cast
 
 from aiogram import Bot, F, Router
 from aiogram.enums import ChatAction
-from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+from aiogram.exceptions import (
+    TelegramBadRequest,
+    TelegramForbiddenError,
+    TelegramRetryAfter,
+)
 from aiogram.filters import Command, CommandObject
 from aiogram.types import (
     CallbackQuery,
@@ -117,6 +122,31 @@ FOLD_INTERVAL_SECONDS = 600.0
 
 # Everything that can go wrong while showing the list and deserves a reply.
 _SHOW_ERRORS = (MealieError, NoShoppingListError, *_TELEGRAM_ERRORS)
+
+# Pause between chats while syncing, so one change does not become a burst of
+# edits that Telegram answers with flood control.
+SYNC_PAUSE_SECONDS = 0.2
+
+
+async def _flood_safe(call: Callable[[], Awaitable[object]]) -> object | None:
+    """Run a Telegram call, waiting out one flood-control window.
+
+    Returns the call's result, or ``None`` when Telegram is still limiting after
+    the wait: one log line, never a user-visible error.
+    """
+    for attempt in (1, 2):
+        try:
+            return await call()
+        except TelegramRetryAfter as exc:
+            if attempt == 2:
+                log.warning(
+                    "Telegram still rate limits after waiting %ss; dropping this update",
+                    exc.retry_after,
+                )
+                return None
+            log.info("Telegram rate limit: waiting %ss before retrying", exc.retry_after)
+            await asyncio.sleep(exc.retry_after)
+    return None
 
 
 def _local_now() -> datetime:
@@ -243,10 +273,13 @@ class ShoppingUI:
         chat = self.chat(message.chat.id)
         text, markup, list_name = await self.render(message.chat.id, state, tr)
         await self._drop_errors(message, chat)
-        sent = await message.answer(text, reply_markup=markup)
-        chat.sent_at[sent.message_id] = self.clock()
-        await self._relocate(chat, message, sent.message_id, list_name, tr)
-        chat.states[sent.message_id] = state
+        sent = await _flood_safe(lambda: message.answer(text, reply_markup=markup))
+        if sent is None:
+            return
+        message_id = cast("Message", sent).message_id
+        chat.sent_at[message_id] = self.clock()
+        await self._relocate(chat, message, message_id, list_name, tr)
+        chat.states[message_id] = state
         await self.fold(message.bot, message.chat.id)
 
     async def show_in(self, message: Message, tr: Translator, state: ListState) -> None:
@@ -293,10 +326,21 @@ class ShoppingUI:
                 tr = Translator(chat.language)
                 state = chat.state_for(chat.live_message_id)
                 text, markup, _ = await self.render(chat_id, state, tr, loaded=loaded)
-                with suppress(*_TELEGRAM_ERRORS):
-                    if not await _edit(bot, chat_id, chat.live_message_id, text, markup):
-                        # Deleted on both sides: the chat has no live message any more.
-                        chat.drop_live_message()
+                try:
+                    edited = await _edit(bot, chat_id, chat.live_message_id, text, markup)
+                except TelegramForbiddenError:
+                    # "bot was blocked" / "chat not found": forget the message so
+                    # later syncs stop trying this chat.
+                    log.info("Chat %s is unreachable; forgetting its live list", chat_id)
+                    chat.drop_live_message()
+                    continue
+                except TelegramBadRequest as exc:
+                    log.info("Could not sync chat %s: %s", chat_id, exc)
+                    continue
+                if not edited:
+                    # Deleted on both sides: the chat has no live message any more.
+                    chat.drop_live_message()
+                await asyncio.sleep(SYNC_PAUSE_SECONDS)
             except (MealieError, NoShoppingListError) as exc:
                 log.warning("Syncing list for another chat failed: %s", exc)
 
@@ -458,10 +502,14 @@ async def _edit(
     (deleted on both sides); an unchanged message counts as edited."""
     if bot is None:  # pragma: no cover - messages from the dispatcher always carry a bot
         return True
-    try:
+
+    async def call() -> None:
         await bot.edit_message_text(
             text, chat_id=chat_id, message_id=message_id, reply_markup=markup
         )
+
+    try:
+        await _flood_safe(call)
     except TelegramBadRequest as exc:
         if "message to edit not found" in str(exc):
             return False
@@ -472,8 +520,12 @@ async def _edit(
 
 async def _edit_plain(bot: Bot, chat_id: int, message_id: int, text: str) -> bool:
     """Edit a message without buttons; False if it is gone or cannot be edited."""
-    try:
+
+    async def call() -> None:
         await bot.edit_message_text(text, chat_id=chat_id, message_id=message_id)
+
+    try:
+        await _flood_safe(call)
     except _TELEGRAM_ERRORS as exc:
         if "message is not modified" in str(exc):
             return True

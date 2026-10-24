@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- Telegram flood control no longer surfaces as a failed update: `retry_after`
+  is waited out once and a second refusal is only logged. A chat that blocked
+  the bot or is gone is forgotten while syncing, so later changes do not keep
+  trying it, and syncing pauses briefly between chats.
 
 ## [0.2.0] - 2026-10-24
 
