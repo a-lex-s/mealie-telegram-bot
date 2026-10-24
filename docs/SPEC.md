@@ -53,7 +53,7 @@ bot at start-up with exit code 2 and a message that never contains secret values
 | `BOT_LANGUAGE` | no | per user | Force one language (`en`, `de`) for everybody |
 | `SHOPPING_LIST` | no | first list | Default shopping list, by name (case-insensitive) or ID |
 | `FEATURE_SHOPPING` | no | `true` | Enable the shopping list feature |
-| `DELETE_COMMANDS` | no | `true` | Delete the user's `/list`, `/lists`, `/clear`, `/category` and `/categories` messages once handled, so only the list stays in the chat |
+| `DELETE_COMMANDS` | no | `true` | Delete the user's `/list`, `/lists`, `/clear`, `/category`, `/categories` and `/version` messages once handled, so only the list stays in the chat |
 | `DELETE_ITEM_MESSAGES` | no | `true` | Delete the user's item messages once the items were added; the history entry records them |
 | `LABEL_EMOJI` | no | keyword table | Emoji per Mealie label name, `Name=🌶️;Other=🐾`; overrides an emoji in the label name and the built-in keyword table (6.4) |
 | `LABEL_ICONS` | no | `both` | What is shown in front of category names: `both`, `color`, `emoji` or `none` (6.4) |
@@ -102,6 +102,7 @@ Mealie as done by that user. Its household determines which lists are visible.
 |---|---|---|---|
 | start | `/start` | `/start` | Short greeting, then one introduction per enabled feature (shopping: example message and an expandable tips block) |
 | help | `/help` | `/hilfe` | Short intro, then one usage section per enabled feature |
+| version | `/version` | `/version` | Package version and, if the image was built with `VCS_REF`, the short commit (7 characters); the version alone otherwise (local runs). Not in the command menu |
 | list | `/list` | `/liste` | Show the active list |
 | lists | `/lists` | `/listen` | Choose the active list |
 | clear | `/clear` | `/aufraeumen` | Delete all ticked-off items of the active list, after confirmation |
@@ -114,8 +115,8 @@ bot do?") are published per language at start-up (`setMyCommands`,
 `setMyDescription`, `setMyShortDescription`).
 
 With `DELETE_COMMANDS=true` (default) the bot deletes the user's `/list`,
-`/lists`, `/clear`, `/category` and `/categories` messages before it shows the
-list, so the chat holds
+`/lists`, `/clear`, `/category`, `/categories` and `/version` messages before it
+shows the list or the answer, so the chat holds
 the list and the history instead of a trail of commands. `/start` and `/help`
 are never deleted.
 
@@ -474,7 +475,8 @@ OpenAPI file when `MEALIE_OPENAPI` points to one.
   only, no `latest` tag) with OCI labels, BuildKit provenance and SBOM, and a
   GitHub build provenance attestation pushed to the registry. A GitHub release
   is created, or updated on a re-run, with generated notes, the image digest
-  and the SPDX SBOM attached. Every job has a timeout.
+  and the SPDX SBOM attached. The commit is also passed to the image as the
+  `VCS_REF` build argument, which `/version` shows. Every job has a timeout.
 * Deployment happens elsewhere: the image is pulled by tag and digest into a
   Compose stack that shares a network with Mealie. See `compose.example.yml`.
 * The container runs as UID 10001 with a read-only root file system and no

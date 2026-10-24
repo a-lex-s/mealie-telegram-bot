@@ -23,6 +23,11 @@ RUN pip install --require-hashes --no-deps -r requirements.txt \
 
 COPY mealie_bot ./mealie_bot
 
+# Set by the release workflow (same value as the OCI revision label) for /version;
+# empty for local builds.
+ARG VCS_REF=""
+ENV VCS_REF=${VCS_REF}
+
 RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin bot
 USER 10001:10001
 

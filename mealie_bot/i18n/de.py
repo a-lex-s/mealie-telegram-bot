@@ -8,6 +8,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "category": ("kategorie", "Kategorie anlegen"),
     "categories": ("kategorien", "Kategorien anzeigen"),
     "help": ("hilfe", "Hilfe"),
+    "version": ("version", "Version anzeigen"),
 }
 
 MESSAGES: dict[str, str] = {
@@ -58,6 +59,8 @@ MESSAGES: dict[str, str] = {
         "ein Name.</blockquote>"
     ),
     "help.no_features": "Es sind keine Funktionen aktiviert.",
+    "version": "🔖 <b>mealie-telegram-bot</b> {version}",
+    "version.commit": "🔖 <b>mealie-telegram-bot</b> {version} · <code>{commit}</code>",
     "error.mealie": "⚠️ Mealie ist gerade nicht erreichbar. Bitte später noch einmal versuchen.",
     "error.mealie_toast": "⚠️ Mealie antwortet nicht. Bitte gleich noch einmal.",
     "error.no_lists": (

@@ -69,6 +69,7 @@ digest for pinning. All settings: [docs/configuration.md](docs/configuration.md)
 | `/category` | `/kategorie` | Create a category |
 | `/categories` | `/kategorien` | Show all categories |
 | `/help` | `/hilfe` | Show help |
+| `/version` | `/version` | Show the version and, in release images, the commit (not in the command menu) |
 
 Any other message adds items, one per line or separated by commas. The list
 then shows what was added, with an *Undo* button.

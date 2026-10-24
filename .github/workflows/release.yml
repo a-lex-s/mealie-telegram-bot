@@ -86,6 +86,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
+          build-args: |
+            VCS_REF=${{ github.sha }}
           provenance: mode=max
           sbom: true
       - name: Attest build provenance

@@ -18,6 +18,7 @@ from aiogram.methods import (
 )
 from aiogram.types import CallbackQuery, Chat, Message, Update, User
 
+from mealie_bot import __version__
 from mealie_bot.config import Settings
 from mealie_bot.features.shopping.render import (
     NO_LABEL,
@@ -176,6 +177,38 @@ async def test_start_and_help_render_with_localized_commands(harness, command, l
     feed, session = harness
     await feed(message(command, language=language))
     assert expected in session.last(SendMessage).text
+
+
+# --- version ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize("language", ["en", "de"])
+async def test_version_without_commit_shows_only_the_version(harness, monkeypatch, language):
+    feed, session = harness
+    monkeypatch.delenv("VCS_REF", raising=False)
+    await feed(message("/version", language=language))
+    assert session.last(SendMessage).text == f"🔖 <b>mealie-telegram-bot</b> {__version__}"
+    # Like other commands, the user's message is deleted.
+    assert session.sent(DeleteMessage)
+
+
+@pytest.mark.parametrize("vcs_ref", ["0123456789abcdef0123456789abcdef01234567", "0123456"])
+async def test_version_with_commit_shows_the_short_commit(harness, monkeypatch, vcs_ref):
+    feed, session = harness
+    monkeypatch.setenv("VCS_REF", vcs_ref)
+    await feed(message("/version"))
+    assert (
+        session.last(SendMessage).text
+        == f"🔖 <b>mealie-telegram-bot</b> {__version__} · <code>0123456</code>"
+    )
+
+
+@pytest.mark.parametrize("harness", [{"delete_commands": False}], indirect=True)
+async def test_version_is_kept_when_commands_are_kept(harness, monkeypatch):
+    feed, session = harness
+    monkeypatch.delenv("VCS_REF", raising=False)
+    await feed(message("/version"))
+    assert session.sent(SendMessage) and not session.sent(DeleteMessage)
 
 
 # --- adding items -----------------------------------------------------------

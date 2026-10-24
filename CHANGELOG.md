@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`🟣 🧂 Condiments`); a label without an emoji match shows just its circle
   instead of 📦. An emoji at the start of a label name in Mealie is used as
   its emoji.
+- `/version` shows the running version and, in release images, the short
+  commit. It is not listed in the command menu.
 - `LABEL_ICONS` (`both`, `color`, `emoji`, `none`) chooses what is shown in
   front of category names.
 

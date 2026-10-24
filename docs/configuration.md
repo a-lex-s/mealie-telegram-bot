@@ -14,7 +14,7 @@ readable by that user (Compose bind-mounts it with its host permissions).
 | `BOT_LANGUAGE` | no | per user | Force `en` or `de` for everybody |
 | `SHOPPING_LIST` | no | first list | Default list, by name or ID |
 | `FEATURE_SHOPPING` | no | `true` | Enable the shopping list feature |
-| `DELETE_COMMANDS` | no | `true` | Delete your `/list`, `/lists`, `/clear`, `/category`, `/categories` messages right away, so only the list stays in the chat; set `false` to keep them |
+| `DELETE_COMMANDS` | no | `true` | Delete your `/list`, `/lists`, `/clear`, `/category`, `/categories`, `/version` messages right away, so only the list stays in the chat; set `false` to keep them |
 | `DELETE_ITEM_MESSAGES` | no | `true` | Delete your item messages (`2 l milk, eggs`) once the items are on the list; set `false` to keep them |
 | `LABEL_EMOJI` | no | built-in table | Emoji per Mealie label, e.g. `Würzmittel=🌶️;Tiere=🐾`; names must match exactly (case does not matter) and win over an emoji in the label name and the built-in keyword table |
 | `LABEL_ICONS` | no | `both` | What category buttons show in front of the name: `both` (colour circle and emoji, `🟣 🧂 Würzmittel`), `color` (`🟣 Würzmittel`), `emoji` (`🧂 Würzmittel`) or `none` (`Würzmittel`) |

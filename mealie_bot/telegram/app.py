@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Callable
+from contextlib import suppress
 
 from aiogram import Bot, Dispatcher, F, Router
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command, CommandStart
 from aiogram.types import BotCommand, BotCommandScopeDefault, Message
 
+from mealie_bot import __version__
 from mealie_bot.config import Settings
 from mealie_bot.features import Feature, FeatureContext, available_features
 from mealie_bot.i18n import CATALOGS, DEFAULT_LANGUAGE, Translator, command_names
@@ -27,7 +31,12 @@ def _command_args(tr: Translator) -> dict[str, str]:
     return {key: tr.command(key) for key in CATALOGS[tr.language].COMMANDS}
 
 
-def build_core_router(features: list[Feature]) -> Router:
+def _short_commit() -> str | None:
+    """The commit the image was built from (``VCS_REF``); unset for local runs."""
+    return os.environ.get("VCS_REF", "").strip()[:7] or None
+
+
+def build_core_router(features: list[Feature], *, delete_commands: bool = False) -> Router:
     router = Router(name="core")
 
     def sections(tr: Translator, intro_key: str, key: Callable[[Feature], str]) -> str:
@@ -44,6 +53,17 @@ def build_core_router(features: list[Feature]) -> Router:
     @router.message(Command(*command_names("help")))
     async def cmd_help(message: Message, tr: Translator) -> None:
         await message.answer(sections(tr, "help", lambda f: f.help_key))
+
+    @router.message(Command(*command_names("version")))
+    async def cmd_version(message: Message, tr: Translator) -> None:
+        if delete_commands:
+            with suppress(TelegramBadRequest, TelegramForbiddenError):
+                await message.delete()
+        commit = _short_commit()
+        if commit:
+            await message.answer(tr("version.commit", version=__version__, commit=commit))
+        else:
+            await message.answer(tr("version", version=__version__))
 
     return router
 
@@ -73,7 +93,7 @@ def build_dispatcher(settings: Settings, mealie: MealieClient) -> Dispatcher:
         observer.middleware(I18nMiddleware(settings.bot_language))
 
     features = enabled_features(settings)
-    dispatcher.include_router(build_core_router(features))
+    dispatcher.include_router(build_core_router(features, delete_commands=settings.delete_commands))
     context = FeatureContext(settings=settings, mealie=mealie)
     for feature in features:
         dispatcher.include_router(feature.build_router(context))

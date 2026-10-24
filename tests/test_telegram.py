@@ -101,3 +101,4 @@ def test_menu_commands_localized():
         "categories",
         "help",
     ]
+    assert "version" not in [c.command for c in menu_commands(features, "de")]
