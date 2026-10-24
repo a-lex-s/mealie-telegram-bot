@@ -8,3 +8,4 @@ mypy==2.4.0
 pip-audit==2.10.1
 zizmor==1.31.1
 import-linter==2.15
+hypothesis==6.148.7
