@@ -23,9 +23,6 @@ off with a tap, and everyone sees the same list in Telegram and in Mealie.
 * English and German, chosen per user
 * Long polling only: no open port, no telemetry, no AI calls
 
-Version 1 covers shopping lists. Recipes and meal plans may follow as optional
-modules.
-
 ## How it looks
 
 | The list | A category opened | Items added |
@@ -81,6 +78,14 @@ category or an unknown product is created after a short question. Under
 category. Category
 buttons show the label's colour from Mealie as a circle (`🟣 🧂 Condiments`);
 `LABEL_ICONS` switches circles or emojis off.
+
+## Roadmap
+
+The bot focuses on shopping lists. Recipes and meal plans are not planned right
+now, but contributions are welcome (see the open issues). Planned and ongoing
+work is tracked on the
+[project board](https://github.com/users/a-lex-s/projects/2) and in the
+[milestones](https://github.com/a-lex-s/mealie-telegram-bot/milestones).
 
 ## Documentation
 

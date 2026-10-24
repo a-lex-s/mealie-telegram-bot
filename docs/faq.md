@@ -77,7 +77,7 @@ or emojis off (see [configuration.md](configuration.md)).
 **Changes made in Mealie do not show up in Telegram.**
 Tap *Refresh* (or any button) or send `/list` again. Changes made through the
 bot by the other person do show up: their change re-renders your list message
-in place. There are no push notifications in version 1.
+in place. There are no push notifications.
 
 **Where did my `/list` message go?**
 The bot deletes `/list`, `/lists`, `/clear`, `/category` and `/categories`
@@ -108,8 +108,10 @@ the bot starts a new one. Entries from before a restart of the bot stay, and
 after a restart the bot starts a new *Earlier changes* message.
 
 **Can I add recipes or a meal plan?**
-Not yet. Version 1 is the shopping list only; the module structure leaves room
-for more.
+Not planned right now: the bot focuses on shopping lists. Contributions are
+welcome, see the [open issues](https://github.com/a-lex-s/mealie-telegram-bot/issues).
+What is planned and in which order is on the
+[project board](https://github.com/users/a-lex-s/projects/2).
 
 **How do I update?**
 Change the image tag (and digest) in your Compose file and run

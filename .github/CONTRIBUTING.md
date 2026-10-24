@@ -5,9 +5,8 @@ environment and what a pull request needs to be merged.
 
 ## Ground rules
 
-* Version 1 is a shopping list helper. Recipe and meal plan features are out of
-  scope until the shopping list has proven itself in daily use; the module
-  structure under `mealie_bot/features/` already leaves room for them.
+* The bot focuses on shopping lists. Recipes and meal plans are not planned
+  right now; open issues for them are welcome to be picked up.
 * The bot talks only to the Telegram Bot API and to `MEALIE_URL`. No other
   network access, no telemetry, no AI calls.
 * The repository is public. Never commit personal data: no real names, email
@@ -79,6 +78,25 @@ python scripts/trim_openapi.py path/to/openapi.json
 The script fails if the client calls a path the document does not have. For a
 new Mealie version, also update the file name in `tests/test_openapi_paths.py`
 and [docs/compatibility.md](../docs/compatibility.md).
+
+## Workflow
+
+1. **Issue.** Work starts from an issue with a type label (`enhancement`,
+   `bug`, `documentation`, `ci`, `dependencies`), a priority label
+   (`priority: high`, `priority: medium`, `priority: low`) and a milestone:
+   the next version, or *Later*. `needs-decision` means a maintainer decides
+   before anyone builds it; `good first issue` marks small, well-described ones.
+2. **Board.** The [project board](https://github.com/users/a-lex-s/projects/2)
+   shows every issue as *Todo*, *In progress* (someone works on it, usually
+   with an open pull request) or *Done* (the issue was closed).
+3. **Pull request.** Title and merge as in
+   [Commits and pull requests](#commits-and-pull-requests); the description
+   says `Closes #N`, and it carries the issue's labels and milestone. Small
+   related issues may share one pull request with one `Closes` line each.
+4. **Merge.** Once CI is green and it is reviewed; the issue closes and its
+   card moves to *Done*.
+5. **Release.** When a milestone is complete, a release pull request bumps the
+   version and a `vX.Y.Z` tag publishes the image (see [Releases](#releases)).
 
 ## Making changes
 

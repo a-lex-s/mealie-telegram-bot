@@ -8,11 +8,11 @@ code changes, this file changes in the same pull request.
 A Telegram bot that serves as a lightweight front end for a self-hosted
 [Mealie](https://mealie.io) instance (developed against Mealie **v3.29.0**).
 
-* **Version 1** covers shopping lists only. It replaces a dedicated shopping
+* The bot covers **shopping lists only**. It replaces a dedicated shopping
   list app for a small household (two people): add items by sending a message,
   tick them off with a tap, everyone sees the same list in Mealie and Telegram.
-* Recipes and meal plans are **out of scope** until version 1 is in daily use.
-  The code structure leaves room for them as separate feature modules.
+* Recipes and meal plans are **not planned** right now; open issues for them
+  can be picked up by contributors.
 
 Non-goals: no AI calls, no telemetry, no web server, no network access other
 than the Telegram Bot API and `MEALIE_URL`. Mealie is not forked or patched.
@@ -29,7 +29,6 @@ mealie_bot/
   telegram/            dispatcher wiring, access control, language middleware
   features/
     shopping/          feature module: parser, service, rendering, chat state, handlers
-    (recipes/, mealplan/ later)
 ```
 
 * One repository and one image for all features.
@@ -564,10 +563,9 @@ OpenAPI file, for example one exported from a newer instance.
   check that says more than "process alive"; `restart: unless-stopped`
   handles crashes.
 
-## 10. Later (not in version 1)
+## 10. Later
 
-* `features/recipes`: search recipes, add a recipe's ingredients to the list.
-* `features/mealplan`: show and edit the week's meal plan.
-* Possibly: remember the active list, history and undo data across restarts,
-  notify the other person about changes (today their list is only updated
-  quietly).
+What is planned, and the order, lives on the
+[project board](https://github.com/users/a-lex-s/projects/2) and in the
+[milestones](https://github.com/a-lex-s/mealie-telegram-bot/milestones). A
+larger feature gets its own section in this document before it is built.

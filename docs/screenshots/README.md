@@ -6,8 +6,8 @@ name.
 
 | File | What it shows | How to get there |
 |---|---|---|
-| `list-collapsed.png` | The live list: progress bar, collapsed categories, the *Done* quote and the *Refresh* / *Done* / *Remove* buttons | send `/list` |
-| `list-expanded.png` | One category opened, items as buttons, short names sharing a row | tap `🥛 Dairy` |
+| `list-collapsed.png` | The live list: progress bar, collapsed categories with their colour circles, the *Done* quote and the *Refresh* / *Done* buttons | send `/list` |
+| `list-expanded.png` | One category opened, items as buttons, short names sharing a row | tap `🔵 🥛 Dairy` |
 | `add-items.png` | Your message `500 g flour, baking powder, 3 lemons` with the list right below it: the *Added* quote, the added categories opened and the *Undo* button | send that message |
 
 Optional dark variants are named `<name>-dark.png`.
@@ -17,7 +17,8 @@ Optional dark variants are named `<name>-dark.png`.
 Create a shopping list **Groceries** in Mealie with English labels and foods
 (delete them afterwards if your instance is not in English):
 
-* Labels: `Dairy`, `Baking`, `Fruit & vegetables`
+* Labels with colours, so the buttons show their circles: `Dairy` (`#5bc0de`,
+  🔵), `Baking` (`#e8b84a`, 🟠), `Fruit & vegetables` (`#5cb85c`, 🟢)
 * Open items: `milk` 2 l, `eggs` 6, `yoghurt` (Dairy); `bread` (no food, so it
   lands in *Other*)
 * Ticked off: `butter`, `tomatoes` 2 cans, `bananas`
