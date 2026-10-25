@@ -1,0 +1,1 @@
+$(cat /tmp/mealie_pr/tests/test_parser_properties.py)
